@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 
@@ -31,6 +31,17 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [currentRestaurant, setCurrentRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
+  const lastUserId = useRef<string | null>(null);
+
+  // Synchronously mark loading when user changes (before effects run)
+  if (user?.id !== lastUserId.current) {
+    lastUserId.current = user?.id ?? null;
+    if (user && !loading) {
+      // User just changed and we're not loading - force loading state
+      // This runs during render, before ProtectedRoute evaluates
+      setLoading(true);
+    }
+  }
 
   const fetchRestaurants = async () => {
     if (!user) {
@@ -39,8 +50,6 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-
-    setLoading(true);
 
     const { data } = await supabase
       .from("restaurant_members")
