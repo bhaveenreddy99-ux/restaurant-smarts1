@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Upload, FileSpreadsheet, ArrowRight, Save, CheckCircle, AlertTriangle } from "lucide-react";
+import { Upload, FileSpreadsheet, ArrowRight, Save, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react";
 import {
   VENDOR_PRESETS,
   CANONICAL_FIELDS,
@@ -26,8 +27,11 @@ import { parseFile } from "@/lib/export-utils";
 type Step = "upload" | "mapping" | "preview" | "done";
 
 export default function ImportPage() {
+  const { listId } = useParams<{ listId: string }>();
+  const navigate = useNavigate();
   const { currentRestaurant } = useRestaurant();
   const { user } = useAuth();
+  const [listName, setListName] = useState("");
   const [step, setStep] = useState<Step>("upload");
 
   // Upload state
@@ -41,8 +45,6 @@ export default function ImportPage() {
 
   // Import destination
   const [destination, setDestination] = useState<"catalog" | "session">("catalog");
-  const [lists, setLists] = useState<any[]>([]);
-  const [selectedList, setSelectedList] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [submitToReview, setSubmitToReview] = useState(false);
 
@@ -57,9 +59,13 @@ export default function ImportPage() {
 
   useEffect(() => {
     if (!currentRestaurant) return;
-    supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setLists(data); });
+    // Fetch list name
+    if (listId) {
+      supabase.from("inventory_lists").select("name").eq("id", listId).single()
+        .then(({ data }) => { if (data) setListName(data.name); });
+    }
     supabase.from("import_templates").select("*").eq("restaurant_id", currentRestaurant.id).order("created_at", { ascending: false }).then(({ data }) => { if (data) setTemplates(data); });
-  }, [currentRestaurant]);
+  }, [currentRestaurant, listId]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -70,26 +76,20 @@ export default function ImportPage() {
       if (h.length === 0) { toast.error("No data found in file"); return; }
       setHeaders(h);
       setRows(r);
-
       const detected = detectVendor(h);
       setVendor(detected);
       const autoMapped = autoMapColumns(h, detected);
       setMapping(autoMapped);
       setStep("mapping");
-      if (detected.id !== "generic") {
-        toast.success(`Detected vendor: ${detected.label}`);
-      }
-    } catch {
-      toast.error("Failed to parse file");
-    }
+      if (detected.id !== "generic") toast.success(`Detected vendor: ${detected.label}`);
+    } catch { toast.error("Failed to parse file"); }
   };
 
   const handleApplyTemplate = (templateId: string) => {
     setSelectedTemplate(templateId);
     const tmpl = templates.find(t => t.id === templateId);
     if (!tmpl) return;
-    const mj = tmpl.mapping_json as Record<string, string | null>;
-    setMapping(mj as Record<CanonicalField, string | null>);
+    setMapping(tmpl.mapping_json as Record<CanonicalField, string | null>);
     const vp = VENDOR_PRESETS.find(p => p.id === tmpl.vendor_name || p.label === tmpl.vendor_name);
     if (vp) setVendor(vp);
     toast.success("Template applied");
@@ -98,8 +98,7 @@ export default function ImportPage() {
   const handleVendorChange = (vendorId: string) => {
     const vp = VENDOR_PRESETS.find(p => p.id === vendorId)!;
     setVendor(vp);
-    const autoMapped = autoMapColumns(headers, vp);
-    setMapping(autoMapped);
+    setMapping(autoMapColumns(headers, vp));
   };
 
   const handleMappingChange = (field: CanonicalField, value: string) => {
@@ -107,15 +106,8 @@ export default function ImportPage() {
   };
 
   const handleProceedToPreview = () => {
-    if (!mapping.item_name) {
-      toast.error("item_name mapping is required");
-      return;
-    }
-    if (destination === "session" && !selectedList) {
-      toast.error("Select an inventory list for session import");
-      return;
-    }
-    // Validate numeric fields
+    if (!mapping.item_name) { toast.error("item_name mapping is required"); return; }
+    if (destination === "session" && !sessionName.trim()) { toast.error("Session name is required"); return; }
     const w: string[] = [];
     const numericFields: CanonicalField[] = ["currentStock", "parLevel", "leadTimeDays", "unitCost"];
     for (const field of numericFields) {
@@ -126,9 +118,7 @@ export default function ImportPage() {
         const v = row[col];
         if (v !== "" && v != null && isNaN(Number(v))) invalidCount++;
       }
-      if (invalidCount > 0) {
-        w.push(`${CANONICAL_FIELDS.find(f => f.key === field)?.label}: ${invalidCount} non-numeric values in first 100 rows`);
-      }
+      if (invalidCount > 0) w.push(`${CANONICAL_FIELDS.find(f => f.key === field)?.label}: ${invalidCount} non-numeric values in first 100 rows`);
     }
     setWarnings(w);
     setStep("preview");
@@ -136,56 +126,49 @@ export default function ImportPage() {
 
   const getMappedValue = (row: Record<string, any>, field: CanonicalField): any => {
     const col = mapping[field];
-    if (!col) return null;
-    return row[col] ?? null;
+    return col ? (row[col] ?? null) : null;
+  };
+
+  const truncate = (val: any, max: number): string | null => {
+    if (val == null) return null;
+    const s = String(val).trim();
+    return s ? s.substring(0, max) : null;
+  };
+
+  const sanitizeMetadata = (row: Record<string, any>, extraCols: string[]): Record<string, any> | null => {
+    const metadata: Record<string, any> = {};
+    let count = 0;
+    for (const col of extraCols) {
+      if (count >= 20) break;
+      if (row[col] !== "" && row[col] != null) {
+        metadata[col.substring(0, 100)] = String(row[col]).substring(0, 500);
+        count++;
+      }
+    }
+    return Object.keys(metadata).length > 0 ? metadata : null;
   };
 
   const handleImport = async () => {
-    if (!currentRestaurant || !user) return;
+    if (!currentRestaurant || !user || !listId) return;
     setImporting(true);
     try {
-      const mappedFields = CANONICAL_FIELDS.map(f => f.key).filter(k => mapping[k]);
       const extraCols = headers.filter(h => !Object.values(mapping).includes(h));
 
-      // Helper to truncate strings safely
-      const truncate = (val: any, max: number): string | null => {
-        if (val == null) return null;
-        const s = String(val).trim();
-        return s ? s.substring(0, max) : null;
-      };
-
-      // Sanitize metadata: limit keys and value sizes
-      const sanitizeMetadata = (row: Record<string, any>, extraCols: string[]): Record<string, any> | null => {
-        const metadata: Record<string, any> = {};
-        let count = 0;
-        for (const col of extraCols) {
-          if (count >= 20) break; // max 20 extra fields
-          if (row[col] !== "" && row[col] != null) {
-            metadata[col.substring(0, 100)] = String(row[col]).substring(0, 500);
-            count++;
-          }
-        }
-        return Object.keys(metadata).length > 0 ? metadata : null;
-      };
-
       if (destination === "catalog") {
-        const catalogItems = rows.map(row => {
-          return {
-            restaurant_id: currentRestaurant.id,
-            inventory_list_id: selectedList || null,
-            item_name: truncate(getMappedValue(row, "item_name"), 200) || "",
-            vendor_sku: truncate(getMappedValue(row, "vendor_sku"), 100),
-            category: truncate(getMappedValue(row, "category"), 100),
-            unit: truncate(getMappedValue(row, "unit"), 50),
-            pack_size: truncate(getMappedValue(row, "pack_size"), 100),
-            default_par_level: validateNumericField(getMappedValue(row, "parLevel")).parsed,
-            default_unit_cost: validateNumericField(getMappedValue(row, "unitCost")).parsed,
-            vendor_name: truncate(getMappedValue(row, "vendor_name"), 200) || (vendor.defaultVendorName ? vendor.defaultVendorName.substring(0, 200) : null),
-            metadata: sanitizeMetadata(row, extraCols),
-          };
-        }).filter(i => i.item_name);
+        const catalogItems = rows.map(row => ({
+          restaurant_id: currentRestaurant.id,
+          inventory_list_id: listId,
+          item_name: truncate(getMappedValue(row, "item_name"), 200) || "",
+          vendor_sku: truncate(getMappedValue(row, "vendor_sku"), 100),
+          category: truncate(getMappedValue(row, "category"), 100),
+          unit: truncate(getMappedValue(row, "unit"), 50),
+          pack_size: truncate(getMappedValue(row, "pack_size"), 100),
+          default_par_level: validateNumericField(getMappedValue(row, "parLevel")).parsed,
+          default_unit_cost: validateNumericField(getMappedValue(row, "unitCost")).parsed,
+          vendor_name: truncate(getMappedValue(row, "vendor_name"), 200) || (vendor.defaultVendorName ? vendor.defaultVendorName.substring(0, 200) : null),
+          metadata: sanitizeMetadata(row, extraCols),
+        })).filter(i => i.item_name);
 
-        // Batch insert in chunks of 500
         for (let i = 0; i < catalogItems.length; i += 500) {
           const chunk = catalogItems.slice(i, i + 500);
           const { error } = await supabase.from("inventory_catalog_items").insert(chunk);
@@ -193,44 +176,39 @@ export default function ImportPage() {
         }
         toast.success(`Imported ${catalogItems.length} items to catalog`);
       } else {
-        // Create session
         const { data: session, error: sessErr } = await supabase.from("inventory_sessions").insert({
           restaurant_id: currentRestaurant.id,
-          inventory_list_id: selectedList,
+          inventory_list_id: listId,
           name: sessionName || `Import ${new Date().toLocaleDateString()}`,
           created_by: user.id,
           status: submitToReview ? "IN_REVIEW" : "IN_PROGRESS",
         }).select().single();
-        if (sessErr || !session) { toast.error(sessErr?.message || "Failed to create session"); setImporting(false); return; }
+        if (sessErr || !session) { toast.error(sessErr?.message || "Failed"); setImporting(false); return; }
 
-        const sessionItems = rows.map(row => {
-          return {
-            session_id: session.id,
-            item_name: truncate(getMappedValue(row, "item_name"), 200) || "",
-            vendor_sku: truncate(getMappedValue(row, "vendor_sku"), 100),
-            category: truncate(getMappedValue(row, "category"), 100),
-            unit: truncate(getMappedValue(row, "unit"), 50),
-            pack_size: truncate(getMappedValue(row, "pack_size"), 100),
-            current_stock: validateNumericField(getMappedValue(row, "currentStock")).parsed || 0,
-            par_level: validateNumericField(getMappedValue(row, "parLevel")).parsed || 0,
-            lead_time_days: validateNumericField(getMappedValue(row, "leadTimeDays")).parsed,
-            unit_cost: validateNumericField(getMappedValue(row, "unitCost")).parsed,
-            vendor_name: truncate(getMappedValue(row, "vendor_name"), 200) || (vendor.defaultVendorName ? vendor.defaultVendorName.substring(0, 200) : null),
-            metadata: sanitizeMetadata(row, extraCols),
-          };
-        }).filter(i => i.item_name);
+        const sessionItems = rows.map(row => ({
+          session_id: session.id,
+          item_name: truncate(getMappedValue(row, "item_name"), 200) || "",
+          vendor_sku: truncate(getMappedValue(row, "vendor_sku"), 100),
+          category: truncate(getMappedValue(row, "category"), 100),
+          unit: truncate(getMappedValue(row, "unit"), 50),
+          pack_size: truncate(getMappedValue(row, "pack_size"), 100),
+          current_stock: validateNumericField(getMappedValue(row, "currentStock")).parsed || 0,
+          par_level: validateNumericField(getMappedValue(row, "parLevel")).parsed || 0,
+          lead_time_days: validateNumericField(getMappedValue(row, "leadTimeDays")).parsed,
+          unit_cost: validateNumericField(getMappedValue(row, "unitCost")).parsed,
+          vendor_name: truncate(getMappedValue(row, "vendor_name"), 200) || (vendor.defaultVendorName ? vendor.defaultVendorName.substring(0, 200) : null),
+          metadata: sanitizeMetadata(row, extraCols),
+        })).filter(i => i.item_name);
 
         for (let i = 0; i < sessionItems.length; i += 500) {
           const chunk = sessionItems.slice(i, i + 500);
           const { error } = await supabase.from("inventory_session_items").insert(chunk);
           if (error) { toast.error(error.message); setImporting(false); return; }
         }
-        toast.success(`Imported ${sessionItems.length} items into session${submitToReview ? " (submitted for review)" : ""}`);
+        toast.success(`Imported ${sessionItems.length} items into session`);
       }
       setStep("done");
-    } catch (err: any) {
-      toast.error(err.message || "Import failed");
-    }
+    } catch (err: any) { toast.error(err.message || "Import failed"); }
     setImporting(false);
   };
 
@@ -246,7 +224,6 @@ export default function ImportPage() {
     if (error) { toast.error(error.message); return; }
     toast.success("Template saved");
     setTemplateName("");
-    // Refresh templates
     const { data } = await supabase.from("import_templates").select("*").eq("restaurant_id", currentRestaurant.id).order("created_at", { ascending: false });
     if (data) setTemplates(data);
   };
@@ -255,9 +232,13 @@ export default function ImportPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <h1 className="text-2xl font-bold">Import Inventory</h1>
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/app/inventory/lists")} className="gap-1">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Button>
+        <h1 className="text-2xl font-bold">Import to {listName || "Inventory List"}</h1>
+      </div>
 
-      {/* Step 1: Upload */}
       {step === "upload" && (
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Upload File</CardTitle></CardHeader>
@@ -267,11 +248,7 @@ export default function ImportPage() {
                 <Label>Apply Saved Template (optional)</Label>
                 <Select value={selectedTemplate} onValueChange={handleApplyTemplate}>
                   <SelectTrigger><SelectValue placeholder="Select a template..." /></SelectTrigger>
-                  <SelectContent>
-                    {templates.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.name} ({t.vendor_name})</SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectContent>{templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name} ({t.vendor_name})</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
@@ -284,113 +261,85 @@ export default function ImportPage() {
         </Card>
       )}
 
-      {/* Step 2: Mapping */}
       {step === "mapping" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" /> Column Mapping</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" /> Column Mapping</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Vendor</Label>
+                <Select value={vendor.id} onValueChange={handleVendorChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{VENDOR_PRESETS.map(v => <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Import Destination</Label>
+                <Select value={destination} onValueChange={v => setDestination(v as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="catalog">Inventory Catalog (master list)</SelectItem>
+                    <SelectItem value="session">Inventory Session</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {destination === "session" && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Vendor Detected</Label>
-                  <Select value={vendor.id} onValueChange={handleVendorChange}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {VENDOR_PRESETS.map(v => <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label>Session Name</Label>
+                  <Input value={sessionName} onChange={e => setSessionName(e.target.value)} placeholder="e.g. Sysco Weekly Import" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Import Destination</Label>
-                  <Select value={destination} onValueChange={v => setDestination(v as any)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="catalog">Inventory Catalog (master list)</SelectItem>
-                      <SelectItem value="session">Inventory Session</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {(destination === "session" || destination === "catalog") && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Inventory List</Label>
-                    <Select value={selectedList} onValueChange={setSelectedList}>
-                      <SelectTrigger><SelectValue placeholder="Select list" /></SelectTrigger>
-                      <SelectContent>{lists.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  {destination === "session" && (
-                    <div className="space-y-2">
-                      <Label>Session Name</Label>
-                      <Input value={sessionName} onChange={e => setSessionName(e.target.value)} placeholder="e.g. Sysco Weekly Import" />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {destination === "session" && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 pt-6">
                   <Checkbox checked={submitToReview} onCheckedChange={v => setSubmitToReview(!!v)} id="submit-review" />
-                  <Label htmlFor="submit-review" className="text-sm">Submit session to Review after import</Label>
-                </div>
-              )}
-
-              <div className="border rounded-lg p-4 space-y-3">
-                <p className="text-sm font-medium">Map your file columns to app fields:</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {CANONICAL_FIELDS.map(field => (
-                    <div key={field.key} className="flex items-center gap-2">
-                      <Label className="w-32 text-xs shrink-0">
-                        {field.label}
-                        {field.required && <span className="text-destructive ml-0.5">*</span>}
-                      </Label>
-                      <Select
-                        value={mapping[field.key] || "__none__"}
-                        onValueChange={v => handleMappingChange(field.key, v)}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">— Not mapped —</SelectItem>
-                          {headers.map(h => (
-                            <SelectItem key={h} value={h}>{h}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {mapping[field.key] && (
-                        <Badge variant="outline" className="text-[10px] shrink-0 text-green-600 border-green-300">✓</Badge>
-                      )}
-                    </div>
-                  ))}
+                  <Label htmlFor="submit-review" className="text-sm">Submit to Review after import</Label>
                 </div>
               </div>
+            )}
 
-              {/* Save template */}
-              <div className="flex items-end gap-2">
-                <div className="space-y-1 flex-1">
-                  <Label className="text-xs">Save mapping as template</Label>
-                  <Input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="e.g. Sysco Weekly Export" className="h-8 text-sm" />
-                </div>
-                <Button size="sm" variant="outline" onClick={handleSaveTemplate} disabled={!templateName.trim()} className="gap-1">
-                  <Save className="h-3.5 w-3.5" /> Save
-                </Button>
+            <div className="border rounded-lg p-4 space-y-3">
+              <p className="text-sm font-medium">Map your file columns to app fields:</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {CANONICAL_FIELDS.map(field => (
+                  <div key={field.key} className="flex items-center gap-2">
+                    <Label className="w-32 text-xs shrink-0">
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-0.5">*</span>}
+                    </Label>
+                    <Select value={mapping[field.key] || "__none__"} onValueChange={v => handleMappingChange(field.key, v)}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— Not mapped —</SelectItem>
+                        {headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {mapping[field.key] && <Badge variant="outline" className="text-[10px] shrink-0 text-green-600 border-green-300">✓</Badge>}
+                  </div>
+                ))}
               </div>
+            </div>
 
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => { setStep("upload"); setFile(null); setHeaders([]); setRows([]); }}>Back</Button>
-                <Button onClick={handleProceedToPreview} className="bg-gradient-amber gap-2">
-                  <ArrowRight className="h-4 w-4" /> Preview & Import
-                </Button>
+            <div className="flex items-end gap-2">
+              <div className="space-y-1 flex-1">
+                <Label className="text-xs">Save mapping as template</Label>
+                <Input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="e.g. Sysco Weekly Export" className="h-8 text-sm" />
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <Button size="sm" variant="outline" onClick={handleSaveTemplate} disabled={!templateName.trim()} className="gap-1">
+                <Save className="h-3.5 w-3.5" /> Save
+              </Button>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setStep("upload"); setFile(null); setHeaders([]); setRows([]); }}>Back</Button>
+              <Button onClick={handleProceedToPreview} className="bg-gradient-amber gap-2">
+                <ArrowRight className="h-4 w-4" /> Preview & Import
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Step 3: Preview */}
       {step === "preview" && (
         <div className="space-y-4">
           {warnings.length > 0 && (
@@ -404,11 +353,10 @@ export default function ImportPage() {
               </CardContent>
             </Card>
           )}
-
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                Preview ({rows.length} total rows) — importing to {destination === "catalog" ? "Catalog" : "Session"}
+                Preview ({rows.length} rows) — importing to {destination === "catalog" ? "Catalog" : "Session"} for {listName}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -437,7 +385,6 @@ export default function ImportPage() {
               {rows.length > 10 && <p className="text-xs text-muted-foreground mt-2">Showing first 10 of {rows.length} rows</p>}
             </CardContent>
           </Card>
-
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setStep("mapping")}>Back</Button>
             <Button onClick={handleImport} className="bg-gradient-amber gap-2" disabled={importing}>
@@ -447,16 +394,18 @@ export default function ImportPage() {
         </div>
       )}
 
-      {/* Step 4: Done */}
       {step === "done" && (
         <Card>
           <CardContent className="py-12 text-center space-y-4">
             <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
             <p className="text-lg font-medium">Import Complete!</p>
             <p className="text-sm text-muted-foreground">{rows.length} items imported successfully.</p>
-            <Button onClick={() => { setStep("upload"); setFile(null); setHeaders([]); setRows([]); setWarnings([]); }} variant="outline">
-              Import Another File
-            </Button>
+            <div className="flex gap-2 justify-center">
+              <Button onClick={() => navigate("/app/inventory/lists")} variant="outline">Back to Lists</Button>
+              <Button onClick={() => { setStep("upload"); setFile(null); setHeaders([]); setRows([]); setWarnings([]); }} variant="outline">
+                Import Another File
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

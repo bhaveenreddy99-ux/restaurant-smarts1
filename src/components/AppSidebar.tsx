@@ -13,7 +13,7 @@ import {
   ChefHat,
   ChevronsUpDown,
   LogOut,
-  Upload,
+  Receipt,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
@@ -45,18 +45,18 @@ const mainNav = [
 const inventoryNav = [
   { title: "Inventory Lists", url: "/app/inventory/lists", icon: ClipboardList },
   { title: "Enter Inventory", url: "/app/inventory/enter", icon: Package },
-  { title: "Import", url: "/app/inventory/import", icon: Upload },
   { title: "Review", url: "/app/inventory/review", icon: ClipboardCheck },
   { title: "Approved", url: "/app/inventory/approved", icon: CheckCircle },
 ];
 
-const orderNav = [
-  { title: "Smart Order", url: "/app/smart-order", icon: ShoppingCart },
-];
-
 const parNav = [
   { title: "PAR Management", url: "/app/par", icon: BookOpen },
+];
+
+const orderNav = [
+  { title: "Smart Order", url: "/app/smart-order", icon: ShoppingCart },
   { title: "List Management", url: "/app/lists", icon: ListChecks },
+  { title: "Purchase History", url: "/app/purchase-history", icon: Receipt },
 ];
 
 const operationsNav = [
@@ -145,9 +145,9 @@ export function AppSidebar() {
 
       <SidebarContent className="px-2">
         {renderGroup("Overview", mainNav)}
-        {renderGroup("Inventory", inventoryNav)}
+        {renderGroup("Inventory Management", inventoryNav)}
+        {renderGroup("PAR Management", parNav)}
         {renderGroup("Ordering", orderNav)}
-        {renderGroup("Management", parNav)}
         {renderGroup("Operations", operationsNav)}
         {isOwner && renderGroup("Admin", adminNav)}
       </SidebarContent>
