@@ -6,7 +6,6 @@ import {
   CheckCircle,
   ShoppingCart,
   BookOpen,
-  ListChecks,
   Truck,
   BarChart3,
   Users,
@@ -43,7 +42,7 @@ const mainNav = [
 ];
 
 const inventoryNav = [
-  { title: "Inventory Lists", url: "/app/inventory/lists", icon: ClipboardList },
+  { title: "Inventory Lists Management", url: "/app/inventory/lists", icon: ClipboardList },
   { title: "Enter Inventory", url: "/app/inventory/enter", icon: Package },
   { title: "Review", url: "/app/inventory/review", icon: ClipboardCheck },
   { title: "Approved", url: "/app/inventory/approved", icon: CheckCircle },
@@ -55,12 +54,14 @@ const parNav = [
 
 const orderNav = [
   { title: "Smart Order", url: "/app/smart-order", icon: ShoppingCart },
-  { title: "List Management", url: "/app/lists", icon: ListChecks },
   { title: "Purchase History", url: "/app/purchase-history", icon: Receipt },
 ];
 
 const operationsNav = [
   { title: "Orders", url: "/app/orders", icon: Truck },
+];
+
+const insightsNav = [
   { title: "Reports", url: "/app/reports", icon: BarChart3 },
 ];
 
@@ -146,9 +147,10 @@ export function AppSidebar() {
       <SidebarContent className="px-2">
         {renderGroup("Overview", mainNav)}
         {renderGroup("Inventory Management", inventoryNav)}
-        {renderGroup("PAR Management", parNav)}
+        {renderGroup("PAR", parNav)}
         {renderGroup("Ordering", orderNav)}
         {renderGroup("Operations", operationsNav)}
+        {renderGroup("Insights", insightsNav)}
         {isOwner && renderGroup("Admin", adminNav)}
       </SidebarContent>
 

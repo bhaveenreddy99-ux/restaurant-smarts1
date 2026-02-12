@@ -20,7 +20,7 @@ import ApprovedPage from "@/pages/app/inventory/Approved";
 import ImportPage from "@/pages/app/inventory/Import";
 import SmartOrderPage from "@/pages/app/SmartOrder";
 import PARManagementPage from "@/pages/app/PARManagement";
-import ListManagementPage from "@/pages/app/ListManagement";
+
 import OrdersPage from "@/pages/app/Orders";
 import ReportsPage from "@/pages/app/Reports";
 import StaffPage from "@/pages/app/Staff";
@@ -53,7 +53,7 @@ const App = () => (
                 <Route path="inventory/import/:listId" element={<ImportPage />} />
                 <Route path="smart-order" element={<SmartOrderPage />} />
                 <Route path="par" element={<PARManagementPage />} />
-                <Route path="lists" element={<ListManagementPage />} />
+                
                 <Route path="orders" element={<OrdersPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="staff" element={<StaffPage />} />
