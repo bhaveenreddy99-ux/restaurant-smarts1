@@ -182,6 +182,63 @@ export type Database = {
           },
         ]
       }
+      inventory_import_files: {
+        Row: {
+          created_count: number | null
+          file_name: string
+          file_type: string | null
+          id: string
+          inventory_list_id: string
+          mapping_json: Json | null
+          restaurant_id: string
+          row_count: number | null
+          skipped_count: number | null
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_count?: number | null
+          file_name: string
+          file_type?: string | null
+          id?: string
+          inventory_list_id: string
+          mapping_json?: Json | null
+          restaurant_id: string
+          row_count?: number | null
+          skipped_count?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_count?: number | null
+          file_name?: string
+          file_type?: string | null
+          id?: string
+          inventory_list_id?: string
+          mapping_json?: Json | null
+          restaurant_id?: string
+          row_count?: number | null
+          skipped_count?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_import_files_inventory_list_id_fkey"
+            columns: ["inventory_list_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_import_files_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_lists: {
         Row: {
           created_at: string
@@ -323,6 +380,7 @@ export type Database = {
       }
       order_items: {
         Row: {
+          catalog_item_id: string | null
           id: string
           item_name: string
           order_id: string
@@ -330,6 +388,7 @@ export type Database = {
           unit: string | null
         }
         Insert: {
+          catalog_item_id?: string | null
           id?: string
           item_name: string
           order_id: string
@@ -337,6 +396,7 @@ export type Database = {
           unit?: string | null
         }
         Update: {
+          catalog_item_id?: string | null
           id?: string
           item_name?: string
           order_id?: string
@@ -344,6 +404,13 @@ export type Database = {
           unit?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "order_items_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_catalog_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "order_items_order_id_fkey"
             columns: ["order_id"]
