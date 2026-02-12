@@ -36,7 +36,12 @@ export default function EnterInventoryPage() {
     if (!currentRestaurant) return;
     supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setLists(data); });
     supabase.from("par_guides").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setParGuides(data); });
-    supabase.from("inventory_catalog_items").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setCatalogItems(data); });
+    // Role-based column selection: hide sensitive pricing data from STAFF
+    const isStaff = currentRestaurant.role === "STAFF";
+    const catalogSelect = isStaff
+      ? "id, restaurant_id, inventory_list_id, item_name, category, unit, pack_size, default_par_level, created_at, updated_at"
+      : "*";
+    supabase.from("inventory_catalog_items").select(catalogSelect).eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setCatalogItems(data); });
   }, [currentRestaurant]);
 
   useEffect(() => {

@@ -36,14 +36,22 @@ export default function StaffPage() {
   };
 
   const handleRemove = async (memberId: string) => {
+    if (currentRestaurant?.role !== "OWNER") {
+      toast.error("Only owners can remove staff members");
+      return;
+    }
     const { error } = await supabase.from("restaurant_members").delete().eq("id", memberId);
-    if (error) toast.error(error.message);
+    if (error) toast.error("Failed to remove member. You may not have permission.");
     else { toast.success("Member removed"); fetchMembers(); }
   };
 
   const handleRoleChange = async (memberId: string, newRole: "OWNER" | "MANAGER" | "STAFF") => {
+    if (currentRestaurant?.role !== "OWNER") {
+      toast.error("Only owners can change roles");
+      return;
+    }
     const { error } = await supabase.from("restaurant_members").update({ role: newRole }).eq("id", memberId);
-    if (error) toast.error(error.message);
+    if (error) toast.error("Failed to update role. You may not have permission.");
     else fetchMembers();
   };
 
