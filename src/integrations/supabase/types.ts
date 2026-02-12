@@ -428,6 +428,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          inventory_list_id: string | null
           name: string
           restaurant_id: string
           updated_at: string
@@ -436,6 +437,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          inventory_list_id?: string | null
           name: string
           restaurant_id: string
           updated_at?: string
@@ -444,11 +446,19 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          inventory_list_id?: string | null
           name?: string
           restaurant_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "par_guides_inventory_list_id_fkey"
+            columns: ["inventory_list_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "par_guides_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -478,6 +488,93 @@ export type Database = {
           id?: string
         }
         Relationships: []
+      }
+      purchase_history: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          inventory_list_id: string | null
+          restaurant_id: string
+          smart_order_run_id: string | null
+          vendor_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventory_list_id?: string | null
+          restaurant_id: string
+          smart_order_run_id?: string | null
+          vendor_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventory_list_id?: string | null
+          restaurant_id?: string
+          smart_order_run_id?: string | null
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_history_inventory_list_id_fkey"
+            columns: ["inventory_list_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_history_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_history_smart_order_run_id_fkey"
+            columns: ["smart_order_run_id"]
+            isOneToOne: false
+            referencedRelation: "smart_order_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_history_items: {
+        Row: {
+          id: string
+          item_name: string
+          purchase_history_id: string
+          quantity: number
+          total_cost: number | null
+          unit_cost: number | null
+        }
+        Insert: {
+          id?: string
+          item_name: string
+          purchase_history_id: string
+          quantity?: number
+          total_cost?: number | null
+          unit_cost?: number | null
+        }
+        Update: {
+          id?: string
+          item_name?: string
+          purchase_history_id?: string
+          quantity?: number
+          total_cost?: number | null
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_history_items_purchase_history_id_fkey"
+            columns: ["purchase_history_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_history"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       restaurant_members: {
         Row: {
@@ -538,6 +635,7 @@ export type Database = {
           risk: string
           run_id: string
           suggested_order: number
+          unit_cost: number | null
         }
         Insert: {
           current_stock?: number
@@ -547,6 +645,7 @@ export type Database = {
           risk?: string
           run_id: string
           suggested_order?: number
+          unit_cost?: number | null
         }
         Update: {
           current_stock?: number
@@ -556,6 +655,7 @@ export type Database = {
           risk?: string
           run_id?: string
           suggested_order?: number
+          unit_cost?: number | null
         }
         Relationships: [
           {
@@ -572,6 +672,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          inventory_list_id: string | null
+          par_guide_id: string | null
           restaurant_id: string
           session_id: string
         }
@@ -579,6 +681,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          inventory_list_id?: string | null
+          par_guide_id?: string | null
           restaurant_id: string
           session_id: string
         }
@@ -586,10 +690,26 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          inventory_list_id?: string | null
+          par_guide_id?: string | null
           restaurant_id?: string
           session_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "smart_order_runs_inventory_list_id_fkey"
+            columns: ["inventory_list_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_order_runs_par_guide_id_fkey"
+            columns: ["par_guide_id"]
+            isOneToOne: false
+            referencedRelation: "par_guides"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "smart_order_runs_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -682,6 +802,10 @@ export type Database = {
       is_member_of: { Args: { r_id: string }; Returns: boolean }
       order_restaurant_id: { Args: { o_id: string }; Returns: string }
       par_guide_restaurant_id: { Args: { pg_id: string }; Returns: string }
+      purchase_history_restaurant_id: {
+        Args: { ph_id: string }
+        Returns: string
+      }
       session_restaurant_id: { Args: { s_id: string }; Returns: string }
       smart_order_run_restaurant_id: {
         Args: { sr_id: string }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,12 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, ClipboardList } from "lucide-react";
+import { Plus, Upload, ClipboardList, Package } from "lucide-react";
 
 export default function InventoryListsPage() {
   const { currentRestaurant } = useRestaurant();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [lists, setLists] = useState<any[]>([]);
+  const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
   const [newName, setNewName] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -24,16 +27,32 @@ export default function InventoryListsPage() {
       .select("*")
       .eq("restaurant_id", currentRestaurant.id)
       .order("created_at", { ascending: false });
-    if (data) setLists(data);
+    if (data) {
+      setLists(data);
+      // Fetch item counts per list
+      const { data: catalogItems } = await supabase
+        .from("inventory_catalog_items")
+        .select("inventory_list_id")
+        .eq("restaurant_id", currentRestaurant.id);
+      if (catalogItems) {
+        const counts: Record<string, number> = {};
+        catalogItems.forEach(i => {
+          if (i.inventory_list_id) {
+            counts[i.inventory_list_id] = (counts[i.inventory_list_id] || 0) + 1;
+          }
+        });
+        setItemCounts(counts);
+      }
+    }
   };
 
   useEffect(() => { fetchLists(); }, [currentRestaurant]);
 
   const handleCreate = async () => {
-    if (!currentRestaurant || !user) return;
+    if (!currentRestaurant || !user || !newName.trim()) return;
     const { error } = await supabase.from("inventory_lists").insert({
       restaurant_id: currentRestaurant.id,
-      name: newName,
+      name: newName.trim(),
       created_by: user.id,
     });
     if (error) toast.error(error.message);
@@ -44,21 +63,23 @@ export default function InventoryListsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Inventory Lists</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-amber gap-2" size="sm"><Plus className="h-4 w-4" /> New List</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Create Inventory List</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>List Name</Label>
-                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Main Kitchen" />
+        <div className="flex gap-2">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-amber gap-2" size="sm"><Plus className="h-4 w-4" /> Create List</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Create Inventory List</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>List Name</Label>
+                  <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Main Kitchen" />
+                </div>
+                <Button onClick={handleCreate} className="w-full bg-gradient-amber">Create</Button>
               </div>
-              <Button onClick={handleCreate} className="w-full bg-gradient-amber">Create</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {lists.length === 0 ? (
@@ -73,8 +94,20 @@ export default function InventoryListsPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">{list.name}</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Package className="h-3.5 w-3.5" />
+                  {itemCounts[list.id] || 0} catalog items
+                </div>
                 <p className="text-xs text-muted-foreground">Created {new Date(list.created_at).toLocaleDateString()}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 w-full"
+                  onClick={() => navigate(`/app/inventory/import/${list.id}`)}
+                >
+                  <Upload className="h-3.5 w-3.5" /> Import Items
+                </Button>
               </CardContent>
             </Card>
           ))}

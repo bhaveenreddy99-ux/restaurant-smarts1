@@ -15,32 +15,79 @@ import { ExportButtons } from "@/components/ExportButtons";
 export default function SmartOrderPage() {
   const { currentRestaurant } = useRestaurant();
   const { user } = useAuth();
+
+  const [lists, setLists] = useState<any[]>([]);
+  const [selectedList, setSelectedList] = useState("");
   const [sessions, setSessions] = useState<any[]>([]);
   const [selectedSession, setSelectedSession] = useState("");
+  const [parGuides, setParGuides] = useState<any[]>([]);
+  const [selectedPar, setSelectedPar] = useState("");
   const [items, setItems] = useState<any[]>([]);
   const [computed, setComputed] = useState(false);
 
+  // Fetch inventory lists
   useEffect(() => {
     if (!currentRestaurant) return;
-    supabase
-      .from("inventory_sessions")
-      .select("*, inventory_lists(name)")
-      .eq("restaurant_id", currentRestaurant.id)
-      .eq("status", "APPROVED")
-      .order("approved_at", { ascending: false })
-      .then(({ data }) => { if (data) setSessions(data); });
+    supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id)
+      .then(({ data }) => { if (data) setLists(data); });
   }, [currentRestaurant]);
 
-  const handleCompute = async () => {
-    if (!selectedSession) return;
-    const { data } = await supabase.from("inventory_session_items").select("*").eq("session_id", selectedSession);
-    if (!data) return;
+  // Fetch approved sessions + PAR guides for selected list
+  useEffect(() => {
+    if (!currentRestaurant || !selectedList) {
+      setSessions([]); setParGuides([]); setSelectedSession(""); setSelectedPar("");
+      return;
+    }
+    supabase.from("inventory_sessions")
+      .select("*")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("inventory_list_id", selectedList)
+      .eq("status", "APPROVED")
+      .order("approved_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          setSessions(data);
+          if (data.length > 0) setSelectedSession(data[0].id);
+        }
+      });
+    supabase.from("par_guides")
+      .select("*")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("inventory_list_id", selectedList)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          setParGuides(data);
+          if (data.length > 0) setSelectedPar(data[0].id);
+        }
+      });
+    setComputed(false);
+    setItems([]);
+  }, [currentRestaurant, selectedList]);
 
-    const computed = data.map(i => {
-      const ratio = Number(i.current_stock) / Math.max(Number(i.par_level), 1);
+  const handleCompute = async () => {
+    if (!selectedSession || !selectedPar) return;
+
+    // Get session items (current stock)
+    const { data: sessionItems } = await supabase.from("inventory_session_items").select("*").eq("session_id", selectedSession);
+    // Get PAR guide items (PAR levels)
+    const { data: parItems } = await supabase.from("par_guide_items").select("*").eq("par_guide_id", selectedPar);
+
+    if (!sessionItems || !parItems) return;
+
+    // Build PAR lookup
+    const parMap: Record<string, any> = {};
+    parItems.forEach(p => { parMap[p.item_name] = p; });
+
+    const computed = sessionItems.map(i => {
+      const par = parMap[i.item_name];
+      const parLevel = par ? Number(par.par_level) : Number(i.par_level);
+      const currentStock = Number(i.current_stock);
+      const ratio = currentStock / Math.max(parLevel, 1);
       return {
         ...i,
-        suggestedOrder: Math.max(Number(i.par_level) - Number(i.current_stock), 0),
+        par_level: parLevel,
+        suggestedOrder: Math.max(parLevel - currentStock, 0),
         risk: ratio < 0.5 ? "RED" : ratio < 1 ? "YELLOW" : "GREEN",
         ratio,
       };
@@ -51,10 +98,13 @@ export default function SmartOrderPage() {
   };
 
   const handleSave = async () => {
-    if (!currentRestaurant || !user || !selectedSession) return;
+    if (!currentRestaurant || !user || !selectedSession || !selectedPar || !selectedList) return;
+
     const { data: run, error } = await supabase.from("smart_order_runs").insert({
       restaurant_id: currentRestaurant.id,
       session_id: selectedSession,
+      inventory_list_id: selectedList,
+      par_guide_id: selectedPar,
       created_by: user.id,
     }).select().single();
     if (error) { toast.error(error.message); return; }
@@ -66,9 +116,32 @@ export default function SmartOrderPage() {
       risk: i.risk,
       current_stock: i.current_stock,
       par_level: i.par_level,
+      unit_cost: i.unit_cost || null,
     }));
     await supabase.from("smart_order_run_items").insert(runItems);
-    toast.success("Smart order run saved!");
+
+    // Auto-create purchase history
+    const { data: ph } = await supabase.from("purchase_history").insert({
+      restaurant_id: currentRestaurant.id,
+      inventory_list_id: selectedList,
+      smart_order_run_id: run.id,
+      created_by: user.id,
+    }).select().single();
+
+    if (ph) {
+      const phItems = items.filter(i => i.suggestedOrder > 0).map(i => ({
+        purchase_history_id: ph.id,
+        item_name: i.item_name,
+        quantity: i.suggestedOrder,
+        unit_cost: i.unit_cost || null,
+        total_cost: i.unit_cost ? i.suggestedOrder * Number(i.unit_cost) : null,
+      }));
+      if (phItems.length > 0) {
+        await supabase.from("purchase_history_items").insert(phItems);
+      }
+    }
+
+    toast.success("Smart order run saved with purchase history!");
   };
 
   const riskBadge = (risk: string) => {
@@ -83,20 +156,34 @@ export default function SmartOrderPage() {
 
       <Card>
         <CardContent className="space-y-4 pt-6">
-          <div className="space-y-2">
-            <Label>Select Approved Session</Label>
-            <Select value={selectedSession} onValueChange={setSelectedSession}>
-              <SelectTrigger><SelectValue placeholder="Choose session" /></SelectTrigger>
-              <SelectContent>
-                {sessions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name} ({s.inventory_lists?.name})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label>Step 1: Inventory List</Label>
+              <Select value={selectedList} onValueChange={setSelectedList}>
+                <SelectTrigger><SelectValue placeholder="Select list" /></SelectTrigger>
+                <SelectContent>{lists.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Step 2: Approved Session</Label>
+              <Select value={selectedSession} onValueChange={setSelectedSession} disabled={!selectedList}>
+                <SelectTrigger><SelectValue placeholder="Select session" /></SelectTrigger>
+                <SelectContent>
+                  {sessions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Step 3: PAR Guide</Label>
+              <Select value={selectedPar} onValueChange={setSelectedPar} disabled={!selectedList}>
+                <SelectTrigger><SelectValue placeholder="Select PAR guide" /></SelectTrigger>
+                <SelectContent>
+                  {parGuides.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Button onClick={handleCompute} className="bg-gradient-amber gap-2" disabled={!selectedSession}>
+          <Button onClick={handleCompute} className="bg-gradient-amber gap-2" disabled={!selectedSession || !selectedPar}>
             <ShoppingCart className="h-4 w-4" /> Compute Smart Order
           </Button>
         </CardContent>
@@ -123,6 +210,7 @@ export default function SmartOrderPage() {
                   <TableHead>Current</TableHead>
                   <TableHead>PAR</TableHead>
                   <TableHead>Order Qty</TableHead>
+                  <TableHead>Est. Cost</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -133,6 +221,9 @@ export default function SmartOrderPage() {
                     <TableCell className="font-mono">{i.current_stock}</TableCell>
                     <TableCell className="font-mono">{i.par_level}</TableCell>
                     <TableCell className="font-mono font-bold">{i.suggestedOrder} {i.unit}</TableCell>
+                    <TableCell className="font-mono">
+                      {i.unit_cost ? `$${(i.suggestedOrder * Number(i.unit_cost)).toFixed(2)}` : "—"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

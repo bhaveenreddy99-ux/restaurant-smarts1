@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, Package, BookOpen } from "lucide-react";
+import { Plus, Send, Package, BookOpen } from "lucide-react";
 
 const defaultCategories = ["Frozen", "Cooler", "Dry"];
 
@@ -35,14 +35,25 @@ export default function EnterInventoryPage() {
   useEffect(() => {
     if (!currentRestaurant) return;
     supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setLists(data); });
-    supabase.from("par_guides").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setParGuides(data); });
-    // Role-based column selection: hide sensitive pricing data from STAFF
+  }, [currentRestaurant]);
+
+  // Fetch PAR guides + catalog for selected list
+  useEffect(() => {
+    if (!currentRestaurant || !selectedList) { setParGuides([]); setCatalogItems([]); return; }
+    supabase.from("par_guides").select("*")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("inventory_list_id", selectedList)
+      .then(({ data }) => { if (data) setParGuides(data); });
+
     const isStaff = currentRestaurant.role === "STAFF";
     const catalogSelect = isStaff
       ? "id, restaurant_id, inventory_list_id, item_name, category, unit, pack_size, default_par_level, created_at, updated_at"
       : "*";
-    supabase.from("inventory_catalog_items").select(catalogSelect).eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setCatalogItems(data); });
-  }, [currentRestaurant]);
+    supabase.from("inventory_catalog_items").select(catalogSelect)
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("inventory_list_id", selectedList)
+      .then(({ data }) => { if (data) setCatalogItems(data); });
+  }, [currentRestaurant, selectedList]);
 
   useEffect(() => {
     if (!selectedPar) { setParItems([]); return; }
@@ -60,8 +71,28 @@ export default function EnterInventoryPage() {
     if (error) { toast.error(error.message); return; }
     setSessionId(data.id);
 
-    // Pre-populate from PAR guide if selected
-    if (parItems.length > 0) {
+    // Pre-populate from catalog items, overlay PAR levels from selected guide
+    const parMap: Record<string, number> = {};
+    parItems.forEach(p => { parMap[p.item_name] = Number(p.par_level); });
+
+    if (catalogItems.length > 0) {
+      const preItems = catalogItems.map(ci => ({
+        session_id: data.id,
+        item_name: ci.item_name,
+        category: ci.category || "Dry",
+        unit: ci.unit || "",
+        current_stock: 0,
+        par_level: parMap[ci.item_name] ?? ci.default_par_level ?? 0,
+        unit_cost: ci.default_unit_cost || null,
+        vendor_sku: ci.vendor_sku || null,
+        pack_size: ci.pack_size || null,
+        vendor_name: ci.vendor_name || null,
+      }));
+      await supabase.from("inventory_session_items").insert(preItems);
+      // Re-fetch to get proper IDs
+      const { data: fetched } = await supabase.from("inventory_session_items").select("*").eq("session_id", data.id);
+      if (fetched) setItems(fetched);
+    } else if (parItems.length > 0) {
       const preItems = parItems.map(p => ({
         session_id: data.id,
         item_name: p.item_name,
@@ -71,7 +102,8 @@ export default function EnterInventoryPage() {
         par_level: p.par_level,
       }));
       await supabase.from("inventory_session_items").insert(preItems);
-      setItems(preItems.map((p, i) => ({ ...p, id: `temp-${i}` })));
+      const { data: fetched } = await supabase.from("inventory_session_items").select("*").eq("session_id", data.id);
+      if (fetched) setItems(fetched);
     }
     toast.success("Session created");
   };
@@ -136,14 +168,14 @@ export default function EnterInventoryPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Inventory List</Label>
-                <Select value={selectedList} onValueChange={setSelectedList}>
+                <Select value={selectedList} onValueChange={v => { setSelectedList(v); setSelectedPar(""); }}>
                   <SelectTrigger><SelectValue placeholder="Select list" /></SelectTrigger>
                   <SelectContent>{lists.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>PAR Guide (optional)</Label>
-                <Select value={selectedPar} onValueChange={setSelectedPar}>
+                <Select value={selectedPar} onValueChange={setSelectedPar} disabled={!selectedList}>
                   <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
