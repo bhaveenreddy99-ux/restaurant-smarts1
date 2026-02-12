@@ -653,6 +653,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_restaurant_with_owner: {
+        Args: { p_is_demo?: boolean; p_name: string }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "restaurants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       custom_list_restaurant_id: { Args: { cl_id: string }; Returns: string }
       has_restaurant_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"]; r_id: string }
