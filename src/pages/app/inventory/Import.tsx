@@ -151,6 +151,8 @@ export default function ImportPage() {
   const handleImport = async () => {
     if (!currentRestaurant || !user || !listId) return;
     setImporting(true);
+    let importedCount = 0;
+    let skippedCount = 0;
     try {
       const extraCols = headers.filter(h => !Object.values(mapping).includes(h));
 
@@ -169,12 +171,49 @@ export default function ImportPage() {
           metadata: sanitizeMetadata(row, extraCols),
         })).filter(i => i.item_name);
 
-        for (let i = 0; i < catalogItems.length; i += 500) {
-          const chunk = catalogItems.slice(i, i + 500);
+        // Fetch existing catalog items for upsert matching
+        const { data: existingItems } = await supabase
+          .from("inventory_catalog_items")
+          .select("id, item_name, vendor_sku")
+          .eq("inventory_list_id", listId);
+
+        const existingBySkuMap = new Map<string, string>();
+        const existingByNameMap = new Map<string, string>();
+        (existingItems || []).forEach(e => {
+          if (e.vendor_sku) existingBySkuMap.set(e.vendor_sku.toLowerCase(), e.id);
+          existingByNameMap.set(e.item_name.toLowerCase().trim(), e.id);
+        });
+
+        const toInsert: typeof catalogItems = [];
+        const toUpdate: { id: string; data: any }[] = [];
+
+        for (const item of catalogItems) {
+          // Match by vendor_sku first, then normalized item_name
+          const matchId = (item.vendor_sku && existingBySkuMap.get(item.vendor_sku.toLowerCase())) ||
+            existingByNameMap.get(item.item_name.toLowerCase().trim());
+          if (matchId) {
+            toUpdate.push({ id: matchId, data: item });
+          } else {
+            toInsert.push(item);
+          }
+        }
+
+        // Batch insert new items
+        for (let i = 0; i < toInsert.length; i += 500) {
+          const chunk = toInsert.slice(i, i + 500);
           const { error } = await supabase.from("inventory_catalog_items").insert(chunk);
           if (error) { toast.error(error.message); setImporting(false); return; }
         }
-        toast.success(`Imported ${catalogItems.length} items to catalog`);
+
+        // Update existing items
+        for (const u of toUpdate) {
+          const { restaurant_id, inventory_list_id, ...updateData } = u.data;
+          await supabase.from("inventory_catalog_items").update(updateData).eq("id", u.id);
+        }
+
+        importedCount = toInsert.length;
+        skippedCount = toUpdate.length;
+        toast.success(`Imported ${toInsert.length} new, updated ${toUpdate.length} existing items`);
       } else {
         const { data: session, error: sessErr } = await supabase.from("inventory_sessions").insert({
           restaurant_id: currentRestaurant.id,
@@ -205,8 +244,23 @@ export default function ImportPage() {
           const { error } = await supabase.from("inventory_session_items").insert(chunk);
           if (error) { toast.error(error.message); setImporting(false); return; }
         }
+        importedCount = sessionItems.length;
         toast.success(`Imported ${sessionItems.length} items into session`);
       }
+
+      // Save import file metadata
+      await supabase.from("inventory_import_files").insert({
+        restaurant_id: currentRestaurant.id,
+        inventory_list_id: listId,
+        file_name: file?.name || "unknown",
+        file_type: file?.name.endsWith(".xlsx") || file?.name.endsWith(".xls") ? "xlsx" : "csv",
+        uploaded_by: user.id,
+        row_count: rows.length,
+        created_count: importedCount,
+        skipped_count: skippedCount,
+        mapping_json: mapping,
+      });
+
       setStep("done");
     } catch (err: any) { toast.error(err.message || "Import failed"); }
     setImporting(false);
