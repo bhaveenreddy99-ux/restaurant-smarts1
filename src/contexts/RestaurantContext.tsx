@@ -40,6 +40,8 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    setLoading(true);
+
     const { data } = await supabase
       .from("restaurant_members")
       .select("restaurant_id, role, restaurants(id, name)")
