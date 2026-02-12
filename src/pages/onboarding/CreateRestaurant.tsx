@@ -22,17 +22,11 @@ export default function CreateRestaurantPage() {
     setLoading(true);
 
     try {
-      const { data: restaurant, error } = await supabase
-        .from("restaurants")
-        .insert({ name })
-        .select()
-        .single();
+      const { error } = await supabase.rpc("create_restaurant_with_owner", {
+        p_name: name,
+        p_is_demo: false,
+      });
       if (error) throw error;
-
-      const { error: mErr } = await supabase
-        .from("restaurant_members")
-        .insert({ restaurant_id: restaurant.id, user_id: user.id, role: "OWNER" });
-      if (mErr) throw mErr;
 
       await refetch();
       toast.success("Restaurant created!");
