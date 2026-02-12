@@ -13,6 +13,7 @@ import {
   ChefHat,
   ChevronsUpDown,
   LogOut,
+  Upload,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
@@ -44,6 +45,7 @@ const mainNav = [
 const inventoryNav = [
   { title: "Inventory Lists", url: "/app/inventory/lists", icon: ClipboardList },
   { title: "Enter Inventory", url: "/app/inventory/enter", icon: Package },
+  { title: "Import", url: "/app/inventory/import", icon: Upload },
   { title: "Review", url: "/app/inventory/review", icon: ClipboardCheck },
   { title: "Approved", url: "/app/inventory/approved", icon: CheckCircle },
 ];
