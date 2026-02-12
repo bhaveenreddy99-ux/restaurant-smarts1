@@ -147,24 +147,41 @@ export default function ImportPage() {
       const mappedFields = CANONICAL_FIELDS.map(f => f.key).filter(k => mapping[k]);
       const extraCols = headers.filter(h => !Object.values(mapping).includes(h));
 
+      // Helper to truncate strings safely
+      const truncate = (val: any, max: number): string | null => {
+        if (val == null) return null;
+        const s = String(val).trim();
+        return s ? s.substring(0, max) : null;
+      };
+
+      // Sanitize metadata: limit keys and value sizes
+      const sanitizeMetadata = (row: Record<string, any>, extraCols: string[]): Record<string, any> | null => {
+        const metadata: Record<string, any> = {};
+        let count = 0;
+        for (const col of extraCols) {
+          if (count >= 20) break; // max 20 extra fields
+          if (row[col] !== "" && row[col] != null) {
+            metadata[col.substring(0, 100)] = String(row[col]).substring(0, 500);
+            count++;
+          }
+        }
+        return Object.keys(metadata).length > 0 ? metadata : null;
+      };
+
       if (destination === "catalog") {
         const catalogItems = rows.map(row => {
-          const metadata: Record<string, any> = {};
-          for (const col of extraCols) {
-            if (row[col] !== "" && row[col] != null) metadata[col] = row[col];
-          }
           return {
             restaurant_id: currentRestaurant.id,
             inventory_list_id: selectedList || null,
-            item_name: String(getMappedValue(row, "item_name") || "").trim(),
-            vendor_sku: getMappedValue(row, "vendor_sku")?.toString() || null,
-            category: getMappedValue(row, "category")?.toString() || null,
-            unit: getMappedValue(row, "unit")?.toString() || null,
-            pack_size: getMappedValue(row, "pack_size")?.toString() || null,
+            item_name: truncate(getMappedValue(row, "item_name"), 200) || "",
+            vendor_sku: truncate(getMappedValue(row, "vendor_sku"), 100),
+            category: truncate(getMappedValue(row, "category"), 100),
+            unit: truncate(getMappedValue(row, "unit"), 50),
+            pack_size: truncate(getMappedValue(row, "pack_size"), 100),
             default_par_level: validateNumericField(getMappedValue(row, "parLevel")).parsed,
             default_unit_cost: validateNumericField(getMappedValue(row, "unitCost")).parsed,
-            vendor_name: getMappedValue(row, "vendor_name")?.toString() || vendor.defaultVendorName || null,
-            metadata: Object.keys(metadata).length > 0 ? metadata : null,
+            vendor_name: truncate(getMappedValue(row, "vendor_name"), 200) || (vendor.defaultVendorName ? vendor.defaultVendorName.substring(0, 200) : null),
+            metadata: sanitizeMetadata(row, extraCols),
           };
         }).filter(i => i.item_name);
 
@@ -187,23 +204,19 @@ export default function ImportPage() {
         if (sessErr || !session) { toast.error(sessErr?.message || "Failed to create session"); setImporting(false); return; }
 
         const sessionItems = rows.map(row => {
-          const metadata: Record<string, any> = {};
-          for (const col of extraCols) {
-            if (row[col] !== "" && row[col] != null) metadata[col] = row[col];
-          }
           return {
             session_id: session.id,
-            item_name: String(getMappedValue(row, "item_name") || "").trim(),
-            vendor_sku: getMappedValue(row, "vendor_sku")?.toString() || null,
-            category: getMappedValue(row, "category")?.toString() || null,
-            unit: getMappedValue(row, "unit")?.toString() || null,
-            pack_size: getMappedValue(row, "pack_size")?.toString() || null,
+            item_name: truncate(getMappedValue(row, "item_name"), 200) || "",
+            vendor_sku: truncate(getMappedValue(row, "vendor_sku"), 100),
+            category: truncate(getMappedValue(row, "category"), 100),
+            unit: truncate(getMappedValue(row, "unit"), 50),
+            pack_size: truncate(getMappedValue(row, "pack_size"), 100),
             current_stock: validateNumericField(getMappedValue(row, "currentStock")).parsed || 0,
             par_level: validateNumericField(getMappedValue(row, "parLevel")).parsed || 0,
             lead_time_days: validateNumericField(getMappedValue(row, "leadTimeDays")).parsed,
             unit_cost: validateNumericField(getMappedValue(row, "unitCost")).parsed,
-            vendor_name: getMappedValue(row, "vendor_name")?.toString() || vendor.defaultVendorName || null,
-            metadata: Object.keys(metadata).length > 0 ? metadata : null,
+            vendor_name: truncate(getMappedValue(row, "vendor_name"), 200) || (vendor.defaultVendorName ? vendor.defaultVendorName.substring(0, 200) : null),
+            metadata: sanitizeMetadata(row, extraCols),
           };
         }).filter(i => i.item_name);
 
