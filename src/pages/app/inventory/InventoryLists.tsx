@@ -1,0 +1,85 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { Plus, ClipboardList } from "lucide-react";
+
+export default function InventoryListsPage() {
+  const { currentRestaurant } = useRestaurant();
+  const { user } = useAuth();
+  const [lists, setLists] = useState<any[]>([]);
+  const [newName, setNewName] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const fetchLists = async () => {
+    if (!currentRestaurant) return;
+    const { data } = await supabase
+      .from("inventory_lists")
+      .select("*")
+      .eq("restaurant_id", currentRestaurant.id)
+      .order("created_at", { ascending: false });
+    if (data) setLists(data);
+  };
+
+  useEffect(() => { fetchLists(); }, [currentRestaurant]);
+
+  const handleCreate = async () => {
+    if (!currentRestaurant || !user) return;
+    const { error } = await supabase.from("inventory_lists").insert({
+      restaurant_id: currentRestaurant.id,
+      name: newName,
+      created_by: user.id,
+    });
+    if (error) toast.error(error.message);
+    else { toast.success("List created"); setNewName(""); setOpen(false); fetchLists(); }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Inventory Lists</h1>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-amber gap-2" size="sm"><Plus className="h-4 w-4" /> New List</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Create Inventory List</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>List Name</Label>
+                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Main Kitchen" />
+              </div>
+              <Button onClick={handleCreate} className="w-full bg-gradient-amber">Create</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {lists.length === 0 ? (
+        <Card><CardContent className="py-12 text-center text-muted-foreground">
+          <ClipboardList className="mx-auto h-10 w-10 mb-3 opacity-30" />
+          No inventory lists yet. Create your first one.
+        </CardContent></Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {lists.map(list => (
+            <Card key={list.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{list.name}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">Created {new Date(list.created_at).toLocaleDateString()}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
