@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, BookOpen, Trash2, Save } from "lucide-react";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export default function PARManagementPage() {
   const { currentRestaurant } = useRestaurant();
@@ -171,11 +172,19 @@ export default function PARManagementPage() {
         <>
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">{selectedGuide.name} - Items</h2>
-            {isManagerOrOwner && items.length > 0 && (
-              <Button size="sm" variant="outline" className="gap-1" onClick={handleSaveParLevels}>
-                <Save className="h-3.5 w-3.5" /> Save PAR Levels
-              </Button>
-            )}
+            <div className="flex gap-2">
+              <ExportButtons
+                items={items.map(i => ({ item_name: i.item_name, category: i.category, unit: i.unit, par_level: i.par_level }))}
+                filename={`par-${selectedGuide.name}`}
+                type="inventory"
+                meta={{ listName: selectedGuide.name }}
+              />
+              {isManagerOrOwner && items.length > 0 && (
+                <Button size="sm" variant="outline" className="gap-1" onClick={handleSaveParLevels}>
+                  <Save className="h-3.5 w-3.5" /> Save PAR Levels
+                </Button>
+              )}
+            </div>
           </div>
           <Card>
             <Table>
