@@ -17,6 +17,7 @@ import InventoryListsPage from "@/pages/app/inventory/InventoryLists";
 import EnterInventoryPage from "@/pages/app/inventory/EnterInventory";
 import ReviewPage from "@/pages/app/inventory/Review";
 import ApprovedPage from "@/pages/app/inventory/Approved";
+import ImportPage from "@/pages/app/inventory/Import";
 import SmartOrderPage from "@/pages/app/SmartOrder";
 import PARManagementPage from "@/pages/app/PARManagement";
 import ListManagementPage from "@/pages/app/ListManagement";
@@ -48,6 +49,7 @@ const App = () => (
                 <Route path="inventory/enter" element={<EnterInventoryPage />} />
                 <Route path="inventory/review" element={<ReviewPage />} />
                 <Route path="inventory/approved" element={<ApprovedPage />} />
+                <Route path="inventory/import" element={<ImportPage />} />
                 <Route path="smart-order" element={<SmartOrderPage />} />
                 <Route path="par" element={<PARManagementPage />} />
                 <Route path="lists" element={<ListManagementPage />} />

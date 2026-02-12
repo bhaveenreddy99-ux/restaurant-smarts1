@@ -78,6 +78,110 @@ export type Database = {
           },
         ]
       }
+      import_templates: {
+        Row: {
+          created_at: string
+          file_type: string | null
+          id: string
+          mapping_json: Json
+          name: string
+          restaurant_id: string
+          vendor_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_type?: string | null
+          id?: string
+          mapping_json?: Json
+          name: string
+          restaurant_id: string
+          vendor_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_type?: string | null
+          id?: string
+          mapping_json?: Json
+          name?: string
+          restaurant_id?: string
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_templates_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_catalog_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          default_par_level: number | null
+          default_unit_cost: number | null
+          id: string
+          inventory_list_id: string | null
+          item_name: string
+          metadata: Json | null
+          pack_size: string | null
+          restaurant_id: string
+          unit: string | null
+          updated_at: string
+          vendor_name: string | null
+          vendor_sku: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          default_par_level?: number | null
+          default_unit_cost?: number | null
+          id?: string
+          inventory_list_id?: string | null
+          item_name: string
+          metadata?: Json | null
+          pack_size?: string | null
+          restaurant_id: string
+          unit?: string | null
+          updated_at?: string
+          vendor_name?: string | null
+          vendor_sku?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          default_par_level?: number | null
+          default_unit_cost?: number | null
+          id?: string
+          inventory_list_id?: string | null
+          item_name?: string
+          metadata?: Json | null
+          pack_size?: string | null
+          restaurant_id?: string
+          unit?: string | null
+          updated_at?: string
+          vendor_name?: string | null
+          vendor_sku?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_catalog_items_inventory_list_id_fkey"
+            columns: ["inventory_list_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_catalog_items_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_lists: {
         Row: {
           created_at: string
@@ -117,10 +221,14 @@ export type Database = {
           id: string
           item_name: string
           lead_time_days: number | null
+          metadata: Json | null
+          pack_size: string | null
           par_level: number
           session_id: string
           unit: string | null
           unit_cost: number | null
+          vendor_name: string | null
+          vendor_sku: string | null
         }
         Insert: {
           category?: string | null
@@ -128,10 +236,14 @@ export type Database = {
           id?: string
           item_name: string
           lead_time_days?: number | null
+          metadata?: Json | null
+          pack_size?: string | null
           par_level?: number
           session_id: string
           unit?: string | null
           unit_cost?: number | null
+          vendor_name?: string | null
+          vendor_sku?: string | null
         }
         Update: {
           category?: string | null
@@ -139,10 +251,14 @@ export type Database = {
           id?: string
           item_name?: string
           lead_time_days?: number | null
+          metadata?: Json | null
+          pack_size?: string | null
           par_level?: number
           session_id?: string
           unit?: string | null
           unit_cost?: number | null
+          vendor_name?: string | null
+          vendor_sku?: string | null
         }
         Relationships: [
           {

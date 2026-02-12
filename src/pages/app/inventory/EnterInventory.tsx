@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, Package } from "lucide-react";
+import { Plus, Send, Trash2, Package, BookOpen } from "lucide-react";
 
 const defaultCategories = ["Frozen", "Cooler", "Dry"];
 
@@ -29,11 +29,14 @@ export default function EnterInventoryPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState("all");
   const [search, setSearch] = useState("");
+  const [catalogItems, setCatalogItems] = useState<any[]>([]);
+  const [catalogOpen, setCatalogOpen] = useState(false);
 
   useEffect(() => {
     if (!currentRestaurant) return;
     supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setLists(data); });
     supabase.from("par_guides").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setParGuides(data); });
+    supabase.from("inventory_catalog_items").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setCatalogItems(data); });
   }, [currentRestaurant]);
 
   useEffect(() => {
@@ -76,6 +79,26 @@ export default function EnterInventoryPage() {
     setItems([...items, data]);
     setNewItem({ item_name: "", category: "Cooler", unit: "", current_stock: 0, par_level: 0, unit_cost: 0 });
     setCreateOpen(false);
+  };
+
+  const handleAddFromCatalog = async (catalogItem: any) => {
+    if (!sessionId) return;
+    const payload = {
+      session_id: sessionId,
+      item_name: catalogItem.item_name,
+      category: catalogItem.category || "Dry",
+      unit: catalogItem.unit || "",
+      current_stock: 0,
+      par_level: catalogItem.default_par_level || 0,
+      unit_cost: catalogItem.default_unit_cost || 0,
+      vendor_sku: catalogItem.vendor_sku || null,
+      pack_size: catalogItem.pack_size || null,
+      vendor_name: catalogItem.vendor_name || null,
+    };
+    const { data, error } = await supabase.from("inventory_session_items").insert(payload).select().single();
+    if (error) { toast.error(error.message); return; }
+    setItems([...items, data]);
+    toast.success(`Added ${catalogItem.item_name}`);
   };
 
   const handleUpdateStock = async (id: string, stock: number) => {
@@ -172,6 +195,27 @@ export default function EnterInventoryPage() {
                 </div>
               </DialogContent>
             </Dialog>
+            {catalogItems.length > 0 && (
+              <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="gap-1"><BookOpen className="h-3.5 w-3.5" /> From Catalog</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader><DialogTitle>Add from Catalog</DialogTitle></DialogHeader>
+                  <div className="max-h-80 overflow-y-auto space-y-1">
+                    {catalogItems.map(ci => (
+                      <div key={ci.id} className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
+                        <div>
+                          <p className="text-sm font-medium">{ci.item_name}</p>
+                          <p className="text-xs text-muted-foreground">{[ci.category, ci.unit, ci.vendor_name].filter(Boolean).join(" · ")}</p>
+                        </div>
+                        <Button size="sm" variant="ghost" onClick={() => handleAddFromCatalog(ci)}><Plus className="h-4 w-4" /></Button>
+                      </div>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
             <div className="ml-auto">
               <Button onClick={handleSubmitForReview} className="bg-gradient-amber gap-2" disabled={items.length === 0}>
                 <Send className="h-4 w-4" /> Submit for Review

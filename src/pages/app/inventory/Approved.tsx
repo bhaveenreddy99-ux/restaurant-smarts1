@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Eye, CheckCircle } from "lucide-react";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export default function ApprovedPage() {
   const { currentRestaurant } = useRestaurant();
@@ -62,7 +63,23 @@ export default function ApprovedPage() {
 
       <Dialog open={!!viewItems} onOpenChange={() => { setViewItems(null); setViewSession(null); }}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>{viewSession?.name}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle>{viewSession?.name}</DialogTitle>
+              {viewItems && viewItems.length > 0 && (
+                <ExportButtons
+                  items={viewItems}
+                  filename={`inventory-${viewSession?.name || "export"}`}
+                  type="inventory"
+                  meta={{
+                    listName: viewSession?.inventory_lists?.name,
+                    sessionName: viewSession?.name,
+                    date: viewSession?.approved_at ? new Date(viewSession.approved_at).toLocaleDateString() : undefined,
+                  }}
+                />
+              )}
+            </div>
+          </DialogHeader>
           <Table>
             <TableHeader>
               <TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead>Stock</TableHead><TableHead>PAR</TableHead><TableHead>Unit Cost</TableHead></TableRow>

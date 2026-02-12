@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { ShoppingCart, Save } from "lucide-react";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export default function SmartOrderPage() {
   const { currentRestaurant } = useRestaurant();
@@ -103,7 +104,12 @@ export default function SmartOrderPage() {
 
       {computed && items.length > 0 && (
         <>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <ExportButtons
+              items={items.map(i => ({ ...i, suggestedOrder: i.suggestedOrder }))}
+              filename="smart-order"
+              type="smartorder"
+            />
             <Button onClick={handleSave} variant="outline" className="gap-2">
               <Save className="h-4 w-4" /> Save Run
             </Button>
