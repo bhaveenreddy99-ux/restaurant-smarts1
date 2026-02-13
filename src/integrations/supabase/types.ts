@@ -78,35 +78,127 @@ export type Database = {
           },
         ]
       }
+      import_runs: {
+        Row: {
+          confidence_score: number | null
+          created_count: number | null
+          file_name: string
+          id: string
+          inventory_list_id: string | null
+          mapping_used_json: Json
+          restaurant_id: string
+          skipped_count: number | null
+          template_id: string | null
+          updated_count: number | null
+          uploaded_at: string
+          uploaded_by: string | null
+          vendor_name: string | null
+          warnings_json: Json | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_count?: number | null
+          file_name: string
+          id?: string
+          inventory_list_id?: string | null
+          mapping_used_json?: Json
+          restaurant_id: string
+          skipped_count?: number | null
+          template_id?: string | null
+          updated_count?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          vendor_name?: string | null
+          warnings_json?: Json | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_count?: number | null
+          file_name?: string
+          id?: string
+          inventory_list_id?: string | null
+          mapping_used_json?: Json
+          restaurant_id?: string
+          skipped_count?: number | null
+          template_id?: string | null
+          updated_count?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          vendor_name?: string | null
+          warnings_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_runs_inventory_list_id_fkey"
+            columns: ["inventory_list_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_runs_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_runs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "import_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_templates: {
         Row: {
           created_at: string
           file_type: string | null
+          header_fingerprint: string | null
           id: string
+          inventory_list_id: string | null
+          last_used_at: string | null
           mapping_json: Json
           name: string
           restaurant_id: string
+          updated_at: string
           vendor_name: string | null
         }
         Insert: {
           created_at?: string
           file_type?: string | null
+          header_fingerprint?: string | null
           id?: string
+          inventory_list_id?: string | null
+          last_used_at?: string | null
           mapping_json?: Json
           name: string
           restaurant_id: string
+          updated_at?: string
           vendor_name?: string | null
         }
         Update: {
           created_at?: string
           file_type?: string | null
+          header_fingerprint?: string | null
           id?: string
+          inventory_list_id?: string | null
+          last_used_at?: string | null
           mapping_json?: Json
           name?: string
           restaurant_id?: string
+          updated_at?: string
           vendor_name?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "import_templates_inventory_list_id_fkey"
+            columns: ["inventory_list_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "import_templates_restaurant_id_fkey"
             columns: ["restaurant_id"]
