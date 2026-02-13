@@ -27,28 +27,32 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-8 animate-fade-in">
-        <div className="text-center">
+      <div className="w-full max-w-sm animate-fade-in">
+        <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2">
-            <ChefHat className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold">Resta<span className="text-gradient-amber">rentIQ</span></span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+              <ChefHat className="h-5 w-5 text-primary" />
+            </div>
+            <span className="text-xl font-bold tracking-tight">Resta<span className="text-gradient-amber">rentIQ</span></span>
           </Link>
-          <p className="mt-2 text-sm text-muted-foreground">Sign in to your account</p>
+          <p className="mt-3 text-sm text-muted-foreground">Sign in to your account</p>
         </div>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" />
-          </div>
-          <Button type="submit" className="w-full bg-gradient-amber" disabled={loading}>
-            {loading ? "Signing in..." : "Sign In"}
-          </Button>
-        </form>
-        <p className="text-center text-sm text-muted-foreground">
+        <div className="rounded-xl border border-border/60 bg-card p-6 shadow-card">
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm">Email</Label>
+              <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" className="h-10" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm">Password</Label>
+              <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" className="h-10" />
+            </div>
+            <Button type="submit" className="w-full bg-gradient-amber h-10" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
+            </Button>
+          </form>
+        </div>
+        <p className="text-center text-sm text-muted-foreground mt-5">
           Don't have an account?{" "}
           <Link to="/signup" className="text-primary hover:underline font-medium">Sign up</Link>
         </p>

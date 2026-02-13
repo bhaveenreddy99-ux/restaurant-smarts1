@@ -4,12 +4,12 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { ShoppingCart, Save } from "lucide-react";
+import { ShoppingCart, Save, DollarSign, AlertTriangle, Package } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 
 export default function SmartOrderPage() {
@@ -25,14 +25,12 @@ export default function SmartOrderPage() {
   const [items, setItems] = useState<any[]>([]);
   const [computed, setComputed] = useState(false);
 
-  // Fetch inventory lists
   useEffect(() => {
     if (!currentRestaurant) return;
     supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id)
       .then(({ data }) => { if (data) setLists(data); });
   }, [currentRestaurant]);
 
-  // Fetch approved sessions + PAR guides for selected list
   useEffect(() => {
     if (!currentRestaurant || !selectedList) {
       setSessions([]); setParGuides([]); setSelectedSession(""); setSelectedPar("");
@@ -68,14 +66,11 @@ export default function SmartOrderPage() {
   const handleCompute = async () => {
     if (!selectedSession || !selectedPar) return;
 
-    // Get session items (current stock)
     const { data: sessionItems } = await supabase.from("inventory_session_items").select("*").eq("session_id", selectedSession);
-    // Get PAR guide items (PAR levels)
     const { data: parItems } = await supabase.from("par_guide_items").select("*").eq("par_guide_id", selectedPar);
 
     if (!sessionItems || !parItems) return;
 
-    // Build PAR lookup
     const parMap: Record<string, any> = {};
     parItems.forEach(p => { parMap[p.item_name] = p; });
 
@@ -120,7 +115,6 @@ export default function SmartOrderPage() {
     }));
     await supabase.from("smart_order_run_items").insert(runItems);
 
-    // Auto-create purchase history
     const { data: ph } = await supabase.from("purchase_history").insert({
       restaurant_id: currentRestaurant.id,
       inventory_list_id: selectedList,
@@ -141,49 +135,58 @@ export default function SmartOrderPage() {
       }
     }
 
-    toast.success("Smart order run saved with purchase history!");
+    toast.success("Smart order saved with purchase history!");
   };
 
   const riskBadge = (risk: string) => {
-    if (risk === "RED") return <Badge variant="destructive" className="text-[10px]">RED</Badge>;
-    if (risk === "YELLOW") return <Badge className="bg-risk-yellow text-foreground text-[10px]">YELLOW</Badge>;
-    return <Badge className="bg-risk-green text-primary-foreground text-[10px]">GREEN</Badge>;
+    if (risk === "RED") return <Badge variant="destructive" className="text-[10px] font-medium">RED</Badge>;
+    if (risk === "YELLOW") return <Badge className="bg-warning text-warning-foreground text-[10px] font-medium">YELLOW</Badge>;
+    return <Badge className="bg-success text-success-foreground text-[10px] font-medium">GREEN</Badge>;
   };
 
+  const totalEstCost = items.reduce((sum, i) => sum + (i.unit_cost ? i.suggestedOrder * Number(i.unit_cost) : 0), 0);
+  const redCount = items.filter(i => i.risk === "RED").length;
+  const orderCount = items.filter(i => i.suggestedOrder > 0).length;
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <h1 className="text-2xl font-bold">Smart Order</h1>
+    <div className="space-y-5 animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Smart Order</h1>
+          <p className="page-description">Generate purchase orders from approved inventory and PAR levels</p>
+        </div>
+      </div>
 
       <Card>
-        <CardContent className="space-y-4 pt-6">
+        <CardContent className="space-y-4 p-5">
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label>Step 1: Inventory List</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">Step 1 — Inventory List</Label>
               <Select value={selectedList} onValueChange={setSelectedList}>
-                <SelectTrigger><SelectValue placeholder="Select list" /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Select list" /></SelectTrigger>
                 <SelectContent>{lists.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Step 2: Approved Session</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">Step 2 — Approved Session</Label>
               <Select value={selectedSession} onValueChange={setSelectedSession} disabled={!selectedList}>
-                <SelectTrigger><SelectValue placeholder="Select session" /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Select session" /></SelectTrigger>
                 <SelectContent>
                   {sessions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Step 3: PAR Guide</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">Step 3 — PAR Guide</Label>
               <Select value={selectedPar} onValueChange={setSelectedPar} disabled={!selectedList}>
-                <SelectTrigger><SelectValue placeholder="Select PAR guide" /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Select PAR guide" /></SelectTrigger>
                 <SelectContent>
                   {parGuides.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <Button onClick={handleCompute} className="bg-gradient-amber gap-2" disabled={!selectedSession || !selectedPar}>
+          <Button onClick={handleCompute} className="bg-gradient-amber shadow-amber gap-2" disabled={!selectedSession || !selectedPar}>
             <ShoppingCart className="h-4 w-4" /> Compute Smart Order
           </Button>
         </CardContent>
@@ -191,37 +194,69 @@ export default function SmartOrderPage() {
 
       {computed && items.length > 0 && (
         <>
+          {/* Summary cards */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Card className="border-destructive/15">
+              <CardContent className="flex items-center gap-3 p-4">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                <div>
+                  <p className="stat-value text-lg">{redCount}</p>
+                  <p className="text-[11px] text-muted-foreground">Critical items</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-3 p-4">
+                <Package className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="stat-value text-lg">{orderCount}</p>
+                  <p className="text-[11px] text-muted-foreground">Items to order</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-primary/15">
+              <CardContent className="flex items-center gap-3 p-4">
+                <DollarSign className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="stat-value text-lg">${totalEstCost.toFixed(2)}</p>
+                  <p className="text-[11px] text-muted-foreground">Est. total cost</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="flex justify-end gap-2">
             <ExportButtons
               items={items.map(i => ({ ...i, suggestedOrder: i.suggestedOrder }))}
               filename="smart-order"
               type="smartorder"
             />
-            <Button onClick={handleSave} variant="outline" className="gap-2">
-              <Save className="h-4 w-4" /> Save Run
+            <Button onClick={handleSave} className="bg-gradient-amber shadow-amber gap-2">
+              <Save className="h-4 w-4" /> Save & Create Purchase History
             </Button>
           </div>
-          <Card>
+
+          <Card className="overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Risk</TableHead>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Current</TableHead>
-                  <TableHead>PAR</TableHead>
-                  <TableHead>Order Qty</TableHead>
-                  <TableHead>Est. Cost</TableHead>
+                <TableRow className="bg-muted/30">
+                  <TableHead className="text-xs font-semibold">Risk</TableHead>
+                  <TableHead className="text-xs font-semibold">Item</TableHead>
+                  <TableHead className="text-xs font-semibold">Current</TableHead>
+                  <TableHead className="text-xs font-semibold">PAR</TableHead>
+                  <TableHead className="text-xs font-semibold">Order Qty</TableHead>
+                  <TableHead className="text-xs font-semibold">Est. Cost</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map(i => (
-                  <TableRow key={i.id}>
+                  <TableRow key={i.id} className="hover:bg-muted/30 transition-colors">
                     <TableCell>{riskBadge(i.risk)}</TableCell>
-                    <TableCell className="font-medium">{i.item_name}</TableCell>
-                    <TableCell className="font-mono">{i.current_stock}</TableCell>
-                    <TableCell className="font-mono">{i.par_level}</TableCell>
-                    <TableCell className="font-mono font-bold">{i.suggestedOrder} {i.unit}</TableCell>
-                    <TableCell className="font-mono">
+                    <TableCell className="font-medium text-sm">{i.item_name}</TableCell>
+                    <TableCell className="font-mono text-sm">{i.current_stock}</TableCell>
+                    <TableCell className="font-mono text-sm text-muted-foreground">{i.par_level}</TableCell>
+                    <TableCell className="font-mono text-sm font-bold">{i.suggestedOrder} <span className="font-normal text-muted-foreground text-xs">{i.unit}</span></TableCell>
+                    <TableCell className="font-mono text-sm">
                       {i.unit_cost ? `$${(i.suggestedOrder * Number(i.unit_cost)).toFixed(2)}` : "—"}
                     </TableCell>
                   </TableRow>
@@ -230,6 +265,16 @@ export default function SmartOrderPage() {
             </Table>
           </Card>
         </>
+      )}
+
+      {computed && items.length === 0 && (
+        <Card>
+          <CardContent className="empty-state">
+            <ShoppingCart className="empty-state-icon" />
+            <p className="empty-state-title">All items are stocked</p>
+            <p className="empty-state-description">No items need reordering based on current stock and PAR levels.</p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

@@ -42,19 +42,16 @@ const mainNav = [
 ];
 
 const inventoryNav = [
-  { title: "Inventory Lists Management", url: "/app/inventory/lists", icon: ClipboardList },
+  { title: "Inventory Lists", url: "/app/inventory/lists", icon: ClipboardList },
   { title: "Enter Inventory", url: "/app/inventory/enter", icon: Package },
   { title: "Review", url: "/app/inventory/review", icon: ClipboardCheck },
   { title: "Approved", url: "/app/inventory/approved", icon: CheckCircle },
+  { title: "Smart Order", url: "/app/smart-order", icon: ShoppingCart },
+  { title: "Purchase History", url: "/app/purchase-history", icon: Receipt },
 ];
 
 const parNav = [
   { title: "PAR Management", url: "/app/par", icon: BookOpen },
-];
-
-const orderNav = [
-  { title: "Smart Order", url: "/app/smart-order", icon: ShoppingCart },
-  { title: "Purchase History", url: "/app/purchase-history", icon: Receipt },
 ];
 
 const operationsNav = [
@@ -80,7 +77,7 @@ export function AppSidebar() {
 
   const renderGroup = (label: string, items: typeof mainNav) => (
     <SidebarGroup key={label}>
-      <SidebarGroupLabel className="text-sidebar-foreground/50 text-[10px] uppercase tracking-wider">
+      <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] font-semibold uppercase tracking-[0.08em] px-3 mb-1">
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
@@ -94,10 +91,10 @@ export function AppSidebar() {
                 <NavLink
                   to={item.url}
                   end={item.url === "/app/dashboard"}
-                  className="gap-3 px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-colors"
+                  className="gap-3 px-3 py-2 text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-lg transition-all duration-150"
                   activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
                 >
-                  <item.icon className="h-4 w-4 shrink-0" />
+                  <item.icon className="h-4 w-4 shrink-0 opacity-70" />
                   <span>{item.title}</span>
                 </NavLink>
               </SidebarMenuButton>
@@ -110,10 +107,12 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-4">
-          <ChefHat className="h-6 w-6 text-sidebar-primary" />
-          <span className="text-base font-bold text-sidebar-accent-foreground">
+      <div className="p-4 pb-2">
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary/10">
+            <ChefHat className="h-4.5 w-4.5 text-sidebar-primary" />
+          </div>
+          <span className="text-[15px] font-bold text-sidebar-accent-foreground tracking-tight">
             Resta<span className="text-sidebar-primary">rentIQ</span>
           </span>
         </div>
@@ -123,10 +122,10 @@ export function AppSidebar() {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-between text-sm text-sidebar-foreground hover:bg-sidebar-accent h-9 px-3"
+              className="w-full justify-between text-[13px] text-sidebar-foreground hover:bg-sidebar-accent h-9 px-3 rounded-lg"
             >
-              <span className="truncate">{currentRestaurant?.name || "Select"}</span>
-              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+              <span className="truncate font-medium">{currentRestaurant?.name || "Select"}</span>
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
@@ -137,27 +136,26 @@ export function AppSidebar() {
                 className={r.id === currentRestaurant?.id ? "bg-accent" : ""}
               >
                 {r.name}
-                <span className="ml-auto text-xs text-muted-foreground">{r.role}</span>
+                <span className="ml-auto text-[10px] text-muted-foreground font-medium">{r.role}</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      <SidebarContent className="px-2">
+      <SidebarContent className="px-2 pt-2">
         {renderGroup("Overview", mainNav)}
-        {renderGroup("Inventory Management", inventoryNav)}
+        {renderGroup("Inventory", inventoryNav)}
         {renderGroup("PAR", parNav)}
-        {renderGroup("Ordering", orderNav)}
         {renderGroup("Operations", operationsNav)}
         {renderGroup("Insights", insightsNav)}
         {isOwner && renderGroup("Admin", adminNav)}
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-3">
         <Button
           variant="ghost"
-          className="w-full justify-start gap-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
+          className="w-full justify-start gap-2.5 text-[13px] text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg h-9"
           onClick={() => { signOut(); navigate("/"); }}
         >
           <LogOut className="h-4 w-4" />
