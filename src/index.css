@@ -47,13 +47,13 @@
     --radius: 0.5rem;
 
     --sidebar-background: 222 28% 9%;
-    --sidebar-foreground: 240 5% 10%;
-    --sidebar-primary: 258 89% 66%;
-    --sidebar-primary-foreground: 250 100% 97%;
-    --sidebar-accent: 240 5% 33%;
+    --sidebar-foreground: 210 20% 78%;
+    --sidebar-primary: 36 90% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 20% 16%;
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 4% 83%;
-    --sidebar-ring: 258 89% 66%;
+    --sidebar-border: 222 20% 18%;
+    --sidebar-ring: 36 90% 55%;
     --sidebar-muted: 222 18% 18%;
 
     --chart-1: 255 91% 76%;
