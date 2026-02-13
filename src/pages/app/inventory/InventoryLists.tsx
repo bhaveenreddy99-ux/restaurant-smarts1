@@ -126,6 +126,44 @@ export default function InventoryListsPage() {
 
   const handleDelete = async () => {
     if (!deleteListId) return;
+    // Cascade-delete all related records before deleting the list
+    const cascadeTables = [
+      "inventory_catalog_items",
+      "inventory_import_files",
+      "import_runs",
+      "import_templates",
+    ] as const;
+    for (const table of cascadeTables) {
+      const { error } = await supabase.from(table).delete().eq("inventory_list_id", deleteListId);
+      if (error) { toast.error(`Failed to clean up ${table}: ${error.message}`); return; }
+    }
+    // Delete sessions and their items
+    const { data: sessions } = await supabase.from("inventory_sessions").select("id").eq("inventory_list_id", deleteListId);
+    if (sessions && sessions.length > 0) {
+      const sessionIds = sessions.map(s => s.id);
+      await supabase.from("inventory_session_items").delete().in("session_id", sessionIds);
+      // Delete smart order runs and their items linked to these sessions
+      const { data: runs } = await supabase.from("smart_order_runs").select("id").in("session_id", sessionIds);
+      if (runs && runs.length > 0) {
+        const runIds = runs.map(r => r.id);
+        await supabase.from("smart_order_run_items").delete().in("run_id", runIds);
+        // Delete purchase history linked to these runs
+        const { data: purchases } = await supabase.from("purchase_history").select("id").in("smart_order_run_id", runIds);
+        if (purchases && purchases.length > 0) {
+          await supabase.from("purchase_history_items").delete().in("purchase_history_id", purchases.map(p => p.id));
+          await supabase.from("purchase_history").delete().in("id", purchases.map(p => p.id));
+        }
+        await supabase.from("smart_order_runs").delete().in("id", runIds);
+      }
+      await supabase.from("inventory_sessions").delete().eq("inventory_list_id", deleteListId);
+    }
+    // Delete PAR guides and their items
+    const { data: parGuides } = await supabase.from("par_guides").select("id").eq("inventory_list_id", deleteListId);
+    if (parGuides && parGuides.length > 0) {
+      await supabase.from("par_guide_items").delete().in("par_guide_id", parGuides.map(g => g.id));
+      await supabase.from("par_guides").delete().eq("inventory_list_id", deleteListId);
+    }
+    // Finally delete the list
     const { error } = await supabase.from("inventory_lists").delete().eq("id", deleteListId);
     if (error) toast.error(error.message);
     else { toast.success("List deleted"); setDeleteListId(null); if (selectedList?.id === deleteListId) setSelectedList(null); fetchLists(); }
