@@ -42,8 +42,8 @@ const mainNav = [
 ];
 
 const inventoryNav = [
-  { title: "Inventory Lists", url: "/app/inventory/lists", icon: ClipboardList },
-  { title: "Enter Inventory", url: "/app/inventory/enter", icon: Package },
+  { title: "List Management", url: "/app/inventory/lists", icon: ClipboardList },
+  { title: "Inventory Management", url: "/app/inventory/enter", icon: Package },
   { title: "Review", url: "/app/inventory/review", icon: ClipboardCheck },
   { title: "Approved", url: "/app/inventory/approved", icon: CheckCircle },
   { title: "Smart Order", url: "/app/smart-order", icon: ShoppingCart },
