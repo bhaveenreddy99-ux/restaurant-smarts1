@@ -19,57 +19,24 @@ export default function StaffPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<string>("STAFF");
 
-  const fetchMembers = async () => {
-    if (!currentRestaurant) return;
-    const { data } = await supabase
-      .from("restaurant_members")
-      .select("*, profiles(email, full_name)")
-      .eq("restaurant_id", currentRestaurant.id);
-    if (data) setMembers(data);
-  };
-
+  const fetchMembers = async () => { if (!currentRestaurant) return; const { data } = await supabase.from("restaurant_members").select("*, profiles(email, full_name)").eq("restaurant_id", currentRestaurant.id); if (data) setMembers(data); };
   useEffect(() => { fetchMembers(); }, [currentRestaurant]);
 
-  const handleInvite = async () => {
-    toast.info("In production, this would send an invite email. For now, the user must sign up first, then be added by user ID.");
-    setOpen(false);
-  };
-
-  const handleRemove = async (memberId: string) => {
-    if (currentRestaurant?.role !== "OWNER") {
-      toast.error("Only owners can remove staff members");
-      return;
-    }
-    const { error } = await supabase.from("restaurant_members").delete().eq("id", memberId);
-    if (error) toast.error("Failed to remove member. You may not have permission.");
-    else { toast.success("Member removed"); fetchMembers(); }
-  };
-
-  const handleRoleChange = async (memberId: string, newRole: "OWNER" | "MANAGER" | "STAFF") => {
-    if (currentRestaurant?.role !== "OWNER") {
-      toast.error("Only owners can change roles");
-      return;
-    }
-    const { error } = await supabase.from("restaurant_members").update({ role: newRole }).eq("id", memberId);
-    if (error) toast.error("Failed to update role. You may not have permission.");
-    else fetchMembers();
-  };
+  const handleInvite = async () => { toast.info("In production, this would send an invite email. For now, the user must sign up first, then be added by user ID."); setOpen(false); };
+  const handleRemove = async (memberId: string) => { if (currentRestaurant?.role !== "OWNER") { toast.error("Only owners can remove staff members"); return; } const { error } = await supabase.from("restaurant_members").delete().eq("id", memberId); if (error) toast.error("Failed to remove member."); else { toast.success("Member removed"); fetchMembers(); } };
+  const handleRoleChange = async (memberId: string, newRole: "OWNER" | "MANAGER" | "STAFF") => { if (currentRestaurant?.role !== "OWNER") { toast.error("Only owners can change roles"); return; } const { error } = await supabase.from("restaurant_members").update({ role: newRole }).eq("id", memberId); if (error) toast.error("Failed to update role."); else fetchMembers(); };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Staff Management</h1>
+    <div className="space-y-5 animate-fade-in">
+      <div className="page-header">
+        <div><h1 className="page-title">Staff Management</h1><p className="page-description">Manage team members and roles</p></div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button className="bg-gradient-amber gap-2" size="sm"><Plus className="h-4 w-4" /> Invite</Button></DialogTrigger>
+          <DialogTrigger asChild><Button className="bg-gradient-amber shadow-amber gap-2" size="sm"><Plus className="h-4 w-4" /> Invite</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Invite Staff</DialogTitle></DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-2"><Label>Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} placeholder="staff@example.com" /></div>
-              <div className="space-y-2"><Label>Role</Label>
-                <Select value={role} onValueChange={setRole}><SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="STAFF">Staff</SelectItem><SelectItem value="MANAGER">Manager</SelectItem></SelectContent>
-                </Select>
-              </div>
+              <div className="space-y-2"><Label>Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} placeholder="staff@example.com" className="h-10" /></div>
+              <div className="space-y-2"><Label>Role</Label><Select value={role} onValueChange={setRole}><SelectTrigger className="h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="STAFF">Staff</SelectItem><SelectItem value="MANAGER">Manager</SelectItem></SelectContent></Select></div>
               <Button onClick={handleInvite} className="w-full bg-gradient-amber">Send Invite</Button>
             </div>
           </DialogContent>
@@ -77,36 +44,19 @@ export default function StaffPage() {
       </div>
 
       {members.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground"><Users className="mx-auto h-10 w-10 mb-3 opacity-30" />No staff members.</CardContent></Card>
+        <Card><CardContent className="empty-state"><Users className="empty-state-icon" /><p className="empty-state-title">No staff members</p></CardContent></Card>
       ) : (
-        <Card>
+        <Card className="overflow-hidden">
           <Table>
-            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead></TableHead></TableRow></TableHeader>
-            <TableBody>
-              {members.map(m => (
-                <TableRow key={m.id}>
-                  <TableCell className="font-medium">{m.profiles?.full_name || "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{m.profiles?.email}</TableCell>
-                  <TableCell>
-                    <Select value={m.role} onValueChange={(v: "OWNER" | "MANAGER" | "STAFF") => handleRoleChange(m.id, v)}>
-                      <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="OWNER">Owner</SelectItem>
-                        <SelectItem value="MANAGER">Manager</SelectItem>
-                        <SelectItem value="STAFF">Staff</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    {m.role !== "OWNER" && (
-                      <Button size="sm" variant="ghost" onClick={() => handleRemove(m.id)}>
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
+            <TableHeader><TableRow className="bg-muted/30"><TableHead className="text-xs font-semibold">Name</TableHead><TableHead className="text-xs font-semibold">Email</TableHead><TableHead className="text-xs font-semibold">Role</TableHead><TableHead className="w-10"></TableHead></TableRow></TableHeader>
+            <TableBody>{members.map(m => (
+              <TableRow key={m.id} className="hover:bg-muted/30 transition-colors">
+                <TableCell className="font-medium text-sm">{m.profiles?.full_name || "—"}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{m.profiles?.email}</TableCell>
+                <TableCell><Select value={m.role} onValueChange={(v: "OWNER" | "MANAGER" | "STAFF") => handleRoleChange(m.id, v)}><SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="OWNER">Owner</SelectItem><SelectItem value="MANAGER">Manager</SelectItem><SelectItem value="STAFF">Staff</SelectItem></SelectContent></Select></TableCell>
+                <TableCell>{m.role !== "OWNER" && <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleRemove(m.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>}</TableCell>
+              </TableRow>
+            ))}</TableBody>
           </Table>
         </Card>
       )}
