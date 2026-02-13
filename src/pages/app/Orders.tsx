@@ -125,7 +125,7 @@ export default function OrdersPage() {
               <div className="cursor-pointer" onClick={() => handleViewOrder(o)}><p className="font-mono text-sm">{o.id.slice(0, 8)}</p><p className="text-[11px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</p></div>
               <div className="flex items-center gap-2">
                 <Badge variant={o.status === "COMPLETED" ? "default" : "secondary"} className="text-[10px] font-medium">{o.status}</Badge>
-                {o.status === "PENDING" && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleUpdateStatus(o.id, "COMPLETED")}>Complete</Button>}
+                {o.status === "PENDING" && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleUpdateStatus(o.id, "COMPLETED" as any)}>Complete</Button>}
               </div>
             </CardContent>
           </Card>
