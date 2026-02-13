@@ -84,7 +84,7 @@ export default function OrdersPage() {
     await supabase.from("usage_events").insert(orderItems.map(i => ({ restaurant_id: currentRestaurant.id, item_name: i.item_name, order_id: order.id, quantity_used: i.quantity })));
     toast.success("Order created"); setOrderItems([]); setOrderOpen(false); fetchOrders();
   };
-  const handleUpdateStatus = async (orderId: string, status: string) => { await supabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", orderId); fetchOrders(); };
+  const handleUpdateStatus = async (orderId: string, status: "PENDING" | "PREP" | "READY" | "COMPLETED" | "CANCELED") => { await supabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", orderId); fetchOrders(); };
   const handleViewOrder = async (order: any) => { const { data } = await supabase.from("order_items").select("*").eq("order_id", order.id); setViewItems(data || []); setViewOrder(order); };
 
   return (
@@ -125,7 +125,7 @@ export default function OrdersPage() {
               <div className="cursor-pointer" onClick={() => handleViewOrder(o)}><p className="font-mono text-sm">{o.id.slice(0, 8)}</p><p className="text-[11px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</p></div>
               <div className="flex items-center gap-2">
                 <Badge variant={o.status === "COMPLETED" ? "default" : "secondary"} className="text-[10px] font-medium">{o.status}</Badge>
-                {o.status === "PENDING" && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleUpdateStatus(o.id, "COMPLETED" as any)}>Complete</Button>}
+                {o.status === "PENDING" && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleUpdateStatus(o.id, "COMPLETED")}>Complete</Button>}
               </div>
             </CardContent>
           </Card>
