@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Plus, Send, Package, BookOpen } from "lucide-react";
 
@@ -37,7 +38,6 @@ export default function EnterInventoryPage() {
     supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id).then(({ data }) => { if (data) setLists(data); });
   }, [currentRestaurant]);
 
-  // Fetch PAR guides + catalog for selected list
   useEffect(() => {
     if (!currentRestaurant || !selectedList) { setParGuides([]); setCatalogItems([]); return; }
     supabase.from("par_guides").select("*")
@@ -71,7 +71,6 @@ export default function EnterInventoryPage() {
     if (error) { toast.error(error.message); return; }
     setSessionId(data.id);
 
-    // Pre-populate from catalog items, overlay PAR levels from selected guide
     const parMap: Record<string, number> = {};
     parItems.forEach(p => { parMap[p.item_name] = Number(p.par_level); });
 
@@ -89,7 +88,6 @@ export default function EnterInventoryPage() {
         vendor_name: ci.vendor_name || null,
       }));
       await supabase.from("inventory_session_items").insert(preItems);
-      // Re-fetch to get proper IDs
       const { data: fetched } = await supabase.from("inventory_session_items").select("*").eq("session_id", data.id);
       if (fetched) setItems(fetched);
     } else if (parItems.length > 0) {
@@ -105,7 +103,7 @@ export default function EnterInventoryPage() {
       const { data: fetched } = await supabase.from("inventory_session_items").select("*").eq("session_id", data.id);
       if (fetched) setItems(fetched);
     }
-    toast.success("Session created");
+    toast.success("Session created — start entering counts");
   };
 
   const handleAddItem = async () => {
@@ -159,24 +157,29 @@ export default function EnterInventoryPage() {
   const categories = [...new Set(items.map(i => i.category).filter(Boolean))];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <h1 className="text-2xl font-bold">Enter Inventory</h1>
+    <div className="space-y-5 animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Enter Inventory</h1>
+          <p className="page-description">Count stock levels for your inventory list</p>
+        </div>
+      </div>
 
       {!sessionId ? (
         <Card>
-          <CardContent className="space-y-4 pt-6">
+          <CardContent className="space-y-4 p-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Inventory List</Label>
+                <Label className="text-sm">Inventory List</Label>
                 <Select value={selectedList} onValueChange={v => { setSelectedList(v); setSelectedPar(""); }}>
-                  <SelectTrigger><SelectValue placeholder="Select list" /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select list" /></SelectTrigger>
                   <SelectContent>{lists.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>PAR Guide (optional)</Label>
+                <Label className="text-sm">PAR Guide (optional)</Label>
                 <Select value={selectedPar} onValueChange={setSelectedPar} disabled={!selectedList}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {parGuides.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -185,20 +188,20 @@ export default function EnterInventoryPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Session Name</Label>
-              <Input value={sessionName} onChange={e => setSessionName(e.target.value)} placeholder="e.g. Monday AM Count" />
+              <Label className="text-sm">Session Name</Label>
+              <Input value={sessionName} onChange={e => setSessionName(e.target.value)} placeholder="e.g. Monday AM Count" className="h-10" />
             </div>
-            <Button onClick={handleCreateSession} className="bg-gradient-amber" disabled={!selectedList || !sessionName}>
+            <Button onClick={handleCreateSession} className="bg-gradient-amber shadow-amber" disabled={!selectedList || !sessionName}>
               Start Session
             </Button>
           </CardContent>
         </Card>
       ) : (
         <>
-          <div className="flex flex-wrap gap-3 items-center">
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search items..." className="max-w-xs" />
+          <div className="flex flex-wrap gap-2.5 items-center">
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search items..." className="max-w-xs h-9" />
             <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
                 {[...defaultCategories, ...categories.filter(c => !defaultCategories.includes(c))].map(c => (
@@ -208,25 +211,25 @@ export default function EnterInventoryPage() {
             </Select>
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1"><Plus className="h-3.5 w-3.5" /> Add Item</Button>
+                <Button size="sm" variant="outline" className="gap-1.5 h-9"><Plus className="h-3.5 w-3.5" /> Add Item</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader><DialogTitle>Add Item</DialogTitle></DialogHeader>
                 <div className="space-y-3">
-                  <div className="space-y-1"><Label>Item Name</Label><Input value={newItem.item_name} onChange={e => setNewItem({ ...newItem, item_name: e.target.value })} /></div>
+                  <div className="space-y-1"><Label>Item Name</Label><Input value={newItem.item_name} onChange={e => setNewItem({ ...newItem, item_name: e.target.value })} className="h-10" /></div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1"><Label>Category</Label>
                       <Select value={newItem.category} onValueChange={v => setNewItem({ ...newItem, category: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                         <SelectContent>{defaultCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1"><Label>Unit</Label><Input value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })} placeholder="lbs, packs..." /></div>
+                    <div className="space-y-1"><Label>Unit</Label><Input value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })} placeholder="lbs, packs..." className="h-10" /></div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1"><Label>Stock</Label><Input type="number" value={newItem.current_stock} onChange={e => setNewItem({ ...newItem, current_stock: +e.target.value })} /></div>
-                    <div className="space-y-1"><Label>PAR Level</Label><Input type="number" value={newItem.par_level} onChange={e => setNewItem({ ...newItem, par_level: +e.target.value })} /></div>
-                    <div className="space-y-1"><Label>Unit Cost</Label><Input type="number" value={newItem.unit_cost} onChange={e => setNewItem({ ...newItem, unit_cost: +e.target.value })} /></div>
+                    <div className="space-y-1"><Label>Stock</Label><Input type="number" value={newItem.current_stock} onChange={e => setNewItem({ ...newItem, current_stock: +e.target.value })} className="h-10" /></div>
+                    <div className="space-y-1"><Label>PAR Level</Label><Input type="number" value={newItem.par_level} onChange={e => setNewItem({ ...newItem, par_level: +e.target.value })} className="h-10" /></div>
+                    <div className="space-y-1"><Label>Unit Cost</Label><Input type="number" value={newItem.unit_cost} onChange={e => setNewItem({ ...newItem, unit_cost: +e.target.value })} className="h-10" /></div>
                   </div>
                   <Button onClick={handleAddItem} className="w-full bg-gradient-amber">Add</Button>
                 </div>
@@ -235,18 +238,18 @@ export default function EnterInventoryPage() {
             {catalogItems.length > 0 && (
               <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="gap-1"><BookOpen className="h-3.5 w-3.5" /> From Catalog</Button>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-9"><BookOpen className="h-3.5 w-3.5" /> From Catalog</Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-lg">
                   <DialogHeader><DialogTitle>Add from Catalog</DialogTitle></DialogHeader>
-                  <div className="max-h-80 overflow-y-auto space-y-1">
+                  <div className="max-h-80 overflow-y-auto space-y-0.5">
                     {catalogItems.map(ci => (
-                      <div key={ci.id} className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
+                      <div key={ci.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
                         <div>
                           <p className="text-sm font-medium">{ci.item_name}</p>
-                          <p className="text-xs text-muted-foreground">{[ci.category, ci.unit, ci.vendor_name].filter(Boolean).join(" · ")}</p>
+                          <p className="text-[11px] text-muted-foreground">{[ci.category, ci.unit, ci.vendor_name].filter(Boolean).join(" · ")}</p>
                         </div>
-                        <Button size="sm" variant="ghost" onClick={() => handleAddFromCatalog(ci)}><Plus className="h-4 w-4" /></Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleAddFromCatalog(ci)}><Plus className="h-4 w-4" /></Button>
                       </div>
                     ))}
                   </div>
@@ -254,44 +257,47 @@ export default function EnterInventoryPage() {
               </Dialog>
             )}
             <div className="ml-auto">
-              <Button onClick={handleSubmitForReview} className="bg-gradient-amber gap-2" disabled={items.length === 0}>
+              <Button onClick={handleSubmitForReview} className="bg-gradient-amber shadow-amber gap-2" disabled={items.length === 0}>
                 <Send className="h-4 w-4" /> Submit for Review
               </Button>
             </div>
           </div>
 
           {filteredItems.length === 0 ? (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">
-              <Package className="mx-auto h-10 w-10 mb-3 opacity-30" />
-              No items yet. Add items to start counting.
-            </CardContent></Card>
-          ) : (
             <Card>
+              <CardContent className="empty-state">
+                <Package className="empty-state-icon" />
+                <p className="empty-state-title">No items yet</p>
+                <p className="empty-state-description">Add items manually or from your catalog to start counting.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Item</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Current Stock</TableHead>
-                    <TableHead>PAR Level</TableHead>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="text-xs font-semibold">Item</TableHead>
+                    <TableHead className="text-xs font-semibold">Category</TableHead>
+                    <TableHead className="text-xs font-semibold">Unit</TableHead>
+                    <TableHead className="text-xs font-semibold">Current Stock</TableHead>
+                    <TableHead className="text-xs font-semibold">PAR Level</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredItems.map(item => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.item_name}</TableCell>
-                      <TableCell><span className="text-xs text-muted-foreground">{item.category}</span></TableCell>
-                      <TableCell className="text-xs">{item.unit}</TableCell>
+                    <TableRow key={item.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
+                      <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{item.unit}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
                           value={item.current_stock}
                           onChange={e => handleUpdateStock(item.id, +e.target.value)}
-                          className="w-20 h-8 text-sm"
+                          className="w-20 h-8 text-sm font-mono"
                         />
                       </TableCell>
-                      <TableCell className="text-sm font-mono">{item.par_level}</TableCell>
+                      <TableCell className="text-sm font-mono text-muted-foreground">{item.par_level}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

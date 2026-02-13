@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -25,14 +26,12 @@ export default function PARManagementPage() {
   const [newGuide, setNewGuide] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
 
-  // Fetch inventory lists
   useEffect(() => {
     if (!currentRestaurant) return;
     supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id)
       .then(({ data }) => { if (data) setLists(data); });
   }, [currentRestaurant]);
 
-  // Fetch PAR guides for selected list
   useEffect(() => {
     if (!currentRestaurant || !selectedList) { setGuides([]); setSelectedGuide(null); return; }
     supabase.from("par_guides").select("*")
@@ -40,7 +39,6 @@ export default function PARManagementPage() {
       .eq("inventory_list_id", selectedList)
       .order("created_at", { ascending: false })
       .then(({ data }) => { if (data) setGuides(data); });
-    // Fetch catalog items for this list
     supabase.from("inventory_catalog_items").select("*")
       .eq("restaurant_id", currentRestaurant.id)
       .eq("inventory_list_id", selectedList)
@@ -62,7 +60,6 @@ export default function PARManagementPage() {
     }).select().single();
     if (error) { toast.error(error.message); return; }
 
-    // Pre-populate from catalog items
     if (catalogItems.length > 0) {
       const parItems = catalogItems.map(ci => ({
         par_guide_id: data.id,
@@ -77,7 +74,6 @@ export default function PARManagementPage() {
     toast.success("PAR guide created");
     setNewGuide("");
     setGuideOpen(false);
-    // Refresh
     const { data: refreshed } = await supabase.from("par_guides").select("*")
       .eq("restaurant_id", currentRestaurant.id)
       .eq("inventory_list_id", selectedList)
@@ -106,19 +102,21 @@ export default function PARManagementPage() {
   const isManagerOrOwner = currentRestaurant?.role === "OWNER" || currentRestaurant?.role === "MANAGER";
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">PAR Management</h1>
+    <div className="space-y-5 animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">PAR Management</h1>
+          <p className="page-description">Set target stock levels for each inventory list</p>
+        </div>
       </div>
 
-      {/* List selector */}
       <Card>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="p-5 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>View by Inventory List</Label>
+              <Label className="text-sm">View by Inventory List</Label>
               <Select value={selectedList} onValueChange={v => { setSelectedList(v); setSelectedGuide(null); setItems([]); }}>
-                <SelectTrigger><SelectValue placeholder="Select list" /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Select list" /></SelectTrigger>
                 <SelectContent>{lists.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -126,14 +124,14 @@ export default function PARManagementPage() {
               <div className="flex items-end">
                 <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-gradient-amber gap-2" size="sm"><Plus className="h-4 w-4" /> New PAR Guide</Button>
+                    <Button className="bg-gradient-amber shadow-amber gap-2" size="sm"><Plus className="h-4 w-4" /> New PAR Guide</Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader><DialogTitle>Create PAR Guide</DialogTitle></DialogHeader>
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label>Guide Name</Label>
-                        <Input value={newGuide} onChange={e => setNewGuide(e.target.value)} placeholder="e.g. Weekday PAR" />
+                        <Input value={newGuide} onChange={e => setNewGuide(e.target.value)} placeholder="e.g. Weekday PAR" className="h-10" />
                       </div>
                       <p className="text-xs text-muted-foreground">Items from the catalog will be pre-populated with default PAR levels.</p>
                       <Button onClick={handleCreateGuide} className="w-full bg-gradient-amber">Create</Button>
@@ -146,32 +144,36 @@ export default function PARManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Guide cards */}
       {selectedList && (
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           {guides.map(g => (
             <Card
               key={g.id}
-              className={`cursor-pointer hover:shadow-md transition-shadow ${selectedGuide?.id === g.id ? "ring-2 ring-primary" : ""}`}
+              className={`cursor-pointer hover:shadow-card transition-all duration-200 ${selectedGuide?.id === g.id ? "ring-2 ring-primary shadow-card" : ""}`}
               onClick={() => { setSelectedGuide(g); fetchItems(g.id); }}
             >
-              <CardHeader className="pb-2"><CardTitle className="text-base">{g.name}</CardTitle></CardHeader>
-              <CardContent><p className="text-xs text-muted-foreground">{new Date(g.created_at).toLocaleDateString()}</p></CardContent>
+              <CardContent className="p-4">
+                <h4 className="font-semibold text-sm">{g.name}</h4>
+                <p className="text-[11px] text-muted-foreground mt-1">{new Date(g.created_at).toLocaleDateString()}</p>
+              </CardContent>
             </Card>
           ))}
           {guides.length === 0 && (
-            <Card className="col-span-3"><CardContent className="py-8 text-center text-muted-foreground">
-              <BookOpen className="mx-auto h-10 w-10 mb-3 opacity-30" />No PAR guides for this list yet.
-            </CardContent></Card>
+            <Card className="col-span-3">
+              <CardContent className="empty-state py-10">
+                <BookOpen className="empty-state-icon" />
+                <p className="empty-state-title">No PAR guides for this list</p>
+                <p className="empty-state-description">Create a PAR guide to set target stock levels.</p>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}
 
-      {/* PAR items editor */}
       {selectedGuide && (
         <>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{selectedGuide.name} - Items</h2>
+            <h2 className="text-sm font-semibold">{selectedGuide.name} — Items</h2>
             <div className="flex gap-2">
               <ExportButtons
                 items={items.map(i => ({ item_name: i.item_name, category: i.category, unit: i.unit, par_level: i.par_level }))}
@@ -180,44 +182,44 @@ export default function PARManagementPage() {
                 meta={{ listName: selectedGuide.name }}
               />
               {isManagerOrOwner && items.length > 0 && (
-                <Button size="sm" variant="outline" className="gap-1" onClick={handleSaveParLevels}>
-                  <Save className="h-3.5 w-3.5" /> Save PAR Levels
+                <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={handleSaveParLevels}>
+                  <Save className="h-3.5 w-3.5" /> Save Levels
                 </Button>
               )}
             </div>
           </div>
-          <Card>
+          <Card className="overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>PAR Level</TableHead>
-                  {isManagerOrOwner && <TableHead></TableHead>}
+                <TableRow className="bg-muted/30">
+                  <TableHead className="text-xs font-semibold">Item</TableHead>
+                  <TableHead className="text-xs font-semibold">Category</TableHead>
+                  <TableHead className="text-xs font-semibold">Unit</TableHead>
+                  <TableHead className="text-xs font-semibold">PAR Level</TableHead>
+                  {isManagerOrOwner && <TableHead className="w-10"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map(i => (
-                  <TableRow key={i.id}>
-                    <TableCell className="font-medium">{i.item_name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{i.category}</TableCell>
-                    <TableCell className="text-xs">{i.unit}</TableCell>
+                  <TableRow key={i.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-medium text-sm">{i.item_name}</TableCell>
+                    <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{i.category}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{i.unit}</TableCell>
                     <TableCell>
                       {isManagerOrOwner ? (
                         <Input
                           type="number"
                           value={i.par_level}
                           onChange={e => handleParLevelChange(i.id, +e.target.value)}
-                          className="w-20 h-8 text-sm"
+                          className="w-20 h-8 text-sm font-mono"
                         />
                       ) : (
-                        <span className="font-mono">{i.par_level}</span>
+                        <span className="font-mono text-sm">{i.par_level}</span>
                       )}
                     </TableCell>
                     {isManagerOrOwner && (
                       <TableCell>
-                        <Button size="sm" variant="ghost" onClick={() => handleDeleteItem(i.id)}>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleDeleteItem(i.id)}>
                           <Trash2 className="h-3.5 w-3.5 text-destructive" />
                         </Button>
                       </TableCell>
@@ -226,7 +228,7 @@ export default function PARManagementPage() {
                 ))}
                 {items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8 text-sm">
                       No items in this PAR guide.
                     </TableCell>
                   </TableRow>

@@ -3,14 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Plus, Upload, ClipboardList, Package, Download, FileText, History } from "lucide-react";
+import { Plus, Upload, ClipboardList, Package, Download, FileText, History, ChevronDown, ChevronUp } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 
 export default function InventoryListsPage() {
@@ -25,9 +27,11 @@ export default function InventoryListsPage() {
   const [exportListId, setExportListId] = useState<string | null>(null);
   const [exportItems, setExportItems] = useState<any[]>([]);
   const [historyListId, setHistoryListId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchLists = async () => {
     if (!currentRestaurant) return;
+    setLoading(true);
     const { data } = await supabase
       .from("inventory_lists")
       .select("*")
@@ -35,7 +39,6 @@ export default function InventoryListsPage() {
       .order("created_at", { ascending: false });
     if (data) {
       setLists(data);
-      // Fetch item counts per list
       const { data: catalogItems } = await supabase
         .from("inventory_catalog_items")
         .select("inventory_list_id")
@@ -49,7 +52,6 @@ export default function InventoryListsPage() {
         });
         setItemCounts(counts);
       }
-      // Fetch import files grouped by list
       const { data: imports } = await supabase
         .from("inventory_import_files")
         .select("*")
@@ -64,6 +66,7 @@ export default function InventoryListsPage() {
         setImportFiles(grouped);
       }
     }
+    setLoading(false);
   };
 
   useEffect(() => { fetchLists(); }, [currentRestaurant]);
@@ -85,64 +88,84 @@ export default function InventoryListsPage() {
     return new Date(files[0].uploaded_at);
   };
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Inventory Lists Management</h1>
-        <div className="flex gap-2">
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-amber gap-2" size="sm"><Plus className="h-4 w-4" /> Create List</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Create Inventory List</DialogTitle></DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>List Name</Label>
-                  <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Main Kitchen" />
-                </div>
-                <Button onClick={handleCreate} className="w-full bg-gradient-amber">Create</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+  if (loading) {
+    return (
+      <div className="space-y-5 animate-fade-in">
+        <Skeleton className="h-7 w-56" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-48 rounded-xl" />)}
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Inventory Lists</h1>
+          <p className="page-description">Manage your master inventory catalogs</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-amber gap-2 shadow-amber" size="sm"><Plus className="h-4 w-4" /> Create List</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Create Inventory List</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>List Name</Label>
+                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Main Kitchen" className="h-10" />
+              </div>
+              <Button onClick={handleCreate} className="w-full bg-gradient-amber">Create</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {lists.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground">
-          <ClipboardList className="mx-auto h-10 w-10 mb-3 opacity-30" />
-          No inventory lists yet. Create your first one.
-        </CardContent></Card>
+        <Card>
+          <CardContent className="empty-state">
+            <ClipboardList className="empty-state-icon" />
+            <p className="empty-state-title">No inventory lists yet</p>
+            <p className="empty-state-description">Create your first inventory list or import from a CSV/Excel file to get started.</p>
+            <Button className="mt-4 bg-gradient-amber gap-2" size="sm" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" /> Create List
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {lists.map(list => {
             const lastImport = getLastImportDate(list.id);
             const listImports = importFiles[list.id] || [];
+            const count = itemCounts[list.id] || 0;
             return (
-              <Card key={list.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{list.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Package className="h-3.5 w-3.5" />
-                    {itemCounts[list.id] || 0} catalog items
+              <Card key={list.id} className="group hover:shadow-card transition-all duration-200 overflow-hidden">
+                <CardContent className="p-5 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-[15px]">{list.name}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{new Date(list.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <Badge variant="secondary" className="text-[11px] font-mono">{count} items</Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground">Created {new Date(list.created_at).toLocaleDateString()}</p>
+
                   {lastImport && (
-                    <p className="text-xs text-muted-foreground">
-                      <FileText className="inline h-3 w-3 mr-1" />
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <FileText className="h-3 w-3" />
                       Last import: {lastImport.toLocaleDateString()}
-                    </p>
+                    </div>
                   )}
-                  <div className="flex gap-2 flex-wrap">
+
+                  <div className="flex gap-2 flex-wrap pt-1">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="gap-1 flex-1"
+                      className="gap-1.5 flex-1 h-8 text-xs"
                       onClick={() => navigate(`/app/inventory/import/${list.id}`)}
                     >
-                      <Upload className="h-3.5 w-3.5" /> Import
+                      <Upload className="h-3 w-3" /> Import
                     </Button>
                     <ExportButtons
                       items={exportListId === list.id ? exportItems : []}
@@ -154,7 +177,7 @@ export default function InventoryListsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="gap-1"
+                        className="gap-1.5 h-8 text-xs"
                         onClick={async () => {
                           const { data } = await supabase
                             .from("inventory_catalog_items")
@@ -166,43 +189,43 @@ export default function InventoryListsPage() {
                           }
                         }}
                       >
-                        <Download className="h-3.5 w-3.5" /> Export
-                      </Button>
-                    )}
-                    {listImports.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="gap-1"
-                        onClick={() => setHistoryListId(historyListId === list.id ? null : list.id)}
-                      >
-                        <History className="h-3.5 w-3.5" /> {listImports.length}
+                        <Download className="h-3 w-3" /> Export
                       </Button>
                     )}
                   </div>
-                  {/* Import history inline */}
-                  {historyListId === list.id && listImports.length > 0 && (
-                    <div className="border rounded-md mt-2">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">File</TableHead>
-                            <TableHead className="text-xs">Date</TableHead>
-                            <TableHead className="text-xs">Rows</TableHead>
-                            <TableHead className="text-xs">New</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {listImports.map(f => (
-                            <TableRow key={f.id}>
-                              <TableCell className="text-xs truncate max-w-[120px]">{f.file_name}</TableCell>
-                              <TableCell className="text-xs">{new Date(f.uploaded_at).toLocaleDateString()}</TableCell>
-                              <TableCell className="text-xs font-mono">{f.row_count}</TableCell>
-                              <TableCell className="text-xs font-mono">{f.created_count}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+
+                  {listImports.length > 0 && (
+                    <div>
+                      <button
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => setHistoryListId(historyListId === list.id ? null : list.id)}
+                      >
+                        <History className="h-3 w-3" />
+                        {listImports.length} import{listImports.length > 1 ? "s" : ""}
+                        {historyListId === list.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      </button>
+                      {historyListId === list.id && (
+                        <div className="mt-2 rounded-lg border overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-[11px] h-8">File</TableHead>
+                                <TableHead className="text-[11px] h-8">Date</TableHead>
+                                <TableHead className="text-[11px] h-8 text-right">Rows</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {listImports.slice(0, 5).map(f => (
+                                <TableRow key={f.id}>
+                                  <TableCell className="text-[11px] py-1.5 truncate max-w-[100px]">{f.file_name}</TableCell>
+                                  <TableCell className="text-[11px] py-1.5">{new Date(f.uploaded_at).toLocaleDateString()}</TableCell>
+                                  <TableCell className="text-[11px] py-1.5 font-mono text-right">{f.row_count}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
