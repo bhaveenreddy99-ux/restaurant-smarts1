@@ -1,15 +1,13 @@
-// Canonical fields for inventory import
+// Canonical fields for inventory catalog import (catalog-only)
 export type CanonicalField =
   | "item_name"
   | "vendor_sku"
   | "category"
   | "unit"
   | "pack_size"
-  | "currentStock"
-  | "parLevel"
-  | "leadTimeDays"
   | "unitCost"
-  | "vendor_name";
+  | "vendor_name"
+  | "brand";
 
 export const CANONICAL_FIELDS: { key: CanonicalField; label: string; required?: boolean; numeric?: boolean }[] = [
   { key: "item_name", label: "Item Name", required: true },
@@ -17,12 +15,27 @@ export const CANONICAL_FIELDS: { key: CanonicalField; label: string; required?: 
   { key: "category", label: "Category" },
   { key: "unit", label: "Unit / UOM" },
   { key: "pack_size", label: "Pack Size" },
-  { key: "currentStock", label: "Current Stock", numeric: true },
-  { key: "parLevel", label: "PAR Level", numeric: true },
-  { key: "leadTimeDays", label: "Lead Time (Days)", numeric: true },
   { key: "unitCost", label: "Unit Cost", numeric: true },
   { key: "vendor_name", label: "Vendor Name" },
+  { key: "brand", label: "Brand" },
 ];
+
+// ─── Ignored columns (belong to sessions / PAR, NOT catalog) ──────────
+export const IGNORED_COLUMN_PATTERNS: string[] = [
+  "currentstock", "current_stock", "current stock",
+  "qty", "quantity", "qtyonhand", "qty on hand", "quantity on hand",
+  "onhand", "on hand", "on_hand",
+  "inventory", "count", "stock level", "stocklevel",
+  "par", "parlevel", "par_level", "par level",
+  "suggestedorder", "suggested_order", "suggested order", "orderqty", "order qty", "order_qty",
+  "leadtime", "lead_time", "lead time", "leadtimedays", "lead_time_days",
+];
+
+/** Check if a header should be ignored (session/PAR data) */
+export function isIgnoredColumn(header: string): boolean {
+  const norm = header.toLowerCase().replace(/[^a-z0-9 _]/g, "").trim();
+  return IGNORED_COLUMN_PATTERNS.some(p => norm === p || norm.replace(/[\s_]/g, "") === p.replace(/[\s_]/g, ""));
+}
 
 export type VendorPreset = {
   id: string;
@@ -45,6 +58,7 @@ export const VENDOR_PRESETS: VendorPreset[] = [
       unit: ["uom", "unit", "measure", "order uom"],
       pack_size: ["pack", "pack size", "pack/size", "case pack"],
       category: ["category", "product category", "dept", "commodity"],
+      brand: ["brand", "sysco brand", "mfg brand", "manufacturer"],
     },
   },
   {
@@ -59,6 +73,7 @@ export const VENDOR_PRESETS: VendorPreset[] = [
       unit: ["uom", "unit", "selling unit"],
       pack_size: ["pack", "pack size", "case pack"],
       category: ["category", "dept", "department"],
+      brand: ["brand", "mfg", "manufacturer"],
     },
   },
   {
@@ -73,22 +88,23 @@ export const VENDOR_PRESETS: VendorPreset[] = [
       unit: ["uom", "unit", "unit of measure"],
       pack_size: ["pack size", "pack", "case size"],
       category: ["category", "dept", "class"],
+      brand: ["brand", "manufacturer", "mfg"],
     },
   },
   {
     id: "r365",
     label: "Restaurant365",
-    detectHeaders: ["r365", "restaurant365", "on hand"],
+    detectHeaders: ["r365", "restaurant365"],
     defaultVendorName: "Restaurant365",
     mappings: {
       item_name: ["item name", "name", "product name", "item"],
       vendor_sku: ["item code", "item number", "sku", "product code"],
       unitCost: ["last cost", "average cost", "current cost", "cost"],
       unit: ["uom", "unit of measure", "unit"],
-      currentStock: ["on hand", "onhand", "quantity on hand", "qty on hand"],
       category: ["category", "storage location", "department"],
       vendor_name: ["vendor", "primary vendor", "supplier"],
       pack_size: ["pack size", "pack", "case size"],
+      brand: ["brand", "manufacturer"],
     },
   },
   {
@@ -116,21 +132,9 @@ const FIELD_SYNONYMS: Record<CanonicalField, string[]> = {
     "averagecost", "currentcost", "extendedprice", "purchaseprice", "buyprice",
     "casecost", "eachcost",
   ],
-  currentStock: [
-    "onhand", "qtyonhand", "quantityonhand", "currentstock", "qty", "count",
-    "stock", "balance", "available", "inventory", "quantityavailable",
-    "stocklevel", "beginning",
-  ],
   unit: [
     "uom", "unit", "measure", "unitofmeasure", "sellingunit", "orderuom",
     "packuom", "purchaseunit",
-  ],
-  parLevel: [
-    "par", "parlevel", "target", "desired", "reorderpoint", "reorderlevel",
-    "minstock", "minimumstock", "minlevel", "safetystock",
-  ],
-  leadTimeDays: [
-    "leadtime", "leaddays", "leadtimedays", "deliverytime", "deliverydays",
   ],
   category: [
     "category", "dept", "department", "group", "storagelocation", "class",
@@ -143,6 +147,9 @@ const FIELD_SYNONYMS: Record<CanonicalField, string[]> = {
   vendor_name: [
     "vendor", "vendorname", "supplier", "primaryvendor", "suppliername",
     "distributor", "source",
+  ],
+  brand: [
+    "brand", "brandname", "manufacturer", "mfg", "mfgbrand", "maker",
   ],
 };
 
@@ -217,8 +224,8 @@ function inferColumnType(rows: Record<string, any>[], colName: string): "numeric
 
 /**
  * Enhanced auto-mapping with confidence scoring.
+ * Ignores columns that match session/PAR patterns.
  * Uses: preset mappings → synonym exact → synonym contains → fuzzy similarity → type inference
- * Returns per-field confidence scores (0-100).
  */
 export function autoMapColumnsWithConfidence(
   headers: string[],
@@ -226,7 +233,9 @@ export function autoMapColumnsWithConfidence(
   rows: Record<string, any>[] = [],
   savedTemplate?: Record<CanonicalField, string | null> | null
 ): FieldMapping[] {
-  const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalize(h) }));
+  // Filter out ignored columns from mapping candidates
+  const eligibleHeaders = headers.filter(h => !isIgnoredColumn(h));
+  const normalizedHeaders = eligibleHeaders.map(h => ({ original: h, normalized: normalize(h) }));
   const usedColumns = new Set<string>();
   const result: FieldMapping[] = [];
 
@@ -236,11 +245,9 @@ export function autoMapColumnsWithConfidence(
     // 0. Check saved template first (highest priority)
     if (savedTemplate && savedTemplate[field.key]) {
       const templateCol = savedTemplate[field.key]!;
-      // Exact match in current headers
-      if (headers.includes(templateCol) && !usedColumns.has(templateCol)) {
+      if (eligibleHeaders.includes(templateCol) && !usedColumns.has(templateCol)) {
         bestMatch = { column: templateCol, confidence: 98, method: "template" };
       } else {
-        // Fuzzy match the saved column name against current headers
         const normTemplate = normalize(templateCol);
         for (const h of normalizedHeaders) {
           if (usedColumns.has(h.original)) continue;
@@ -289,7 +296,7 @@ export function autoMapColumnsWithConfidence(
       const allSyns = [...(preset.mappings[field.key] || []), ...(FIELD_SYNONYMS[field.key] || [])];
       for (const syn of allSyns) {
         const normSyn = normalize(syn);
-        if (normSyn.length < 3) continue; // skip very short synonyms for contains
+        if (normSyn.length < 3) continue;
         const match = normalizedHeaders.find(
           h => h.normalized.includes(normSyn) && !usedColumns.has(h.original)
         );
@@ -327,7 +334,6 @@ export function autoMapColumnsWithConfidence(
         if (usedColumns.has(h.original)) continue;
         const colType = inferColumnType(rows, h.original);
         if (colType === "numeric") {
-          // Check if the header vaguely hints at this field
           const fieldNorm = normalize(field.key);
           const sim = diceCoefficient(h.normalized, fieldNorm);
           if (sim > 0.3) {
@@ -385,7 +391,6 @@ export function autoMapColumns(
 
 export function validateNumericField(value: any): { valid: boolean; parsed: number | null } {
   if (value === null || value === undefined || value === "") return { valid: true, parsed: null };
-  // Strip common currency/formatting characters
   const cleaned = String(value).replace(/[$,\s]/g, "");
   const num = Number(cleaned);
   if (isNaN(num)) return { valid: false, parsed: null };
