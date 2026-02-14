@@ -7,6 +7,7 @@ import { Package, AlertTriangle, TrendingUp, ShoppingCart, ArrowUpRight } from "
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import ParAlertsBanner from "@/components/ParAlertsBanner";
 
 export default function DashboardPage() {
   const { currentRestaurant } = useRestaurant();
@@ -107,6 +108,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
+      <ParAlertsBanner />
       <div className="page-header">
         <div>
           <h1 className="page-title">Dashboard</h1>

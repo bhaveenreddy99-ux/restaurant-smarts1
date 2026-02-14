@@ -524,8 +524,12 @@ function DangerSection({ restaurantId, isOwner, isManager }: { restaurantId?: st
         await supabase.from("purchase_history").delete().eq("restaurant_id", restaurantId);
       }
       toast.success("Purchase history deleted");
-    } else if (activeAction === "restaurant") {
-      toast.info("Restaurant deletion requires backend support. Contact support.");
+  } else if (activeAction === "restaurant") {
+      const { error } = await supabase.rpc("delete_restaurant_cascade", { p_restaurant_id: restaurantId });
+      if (error) { toast.error("Failed to delete restaurant: " + error.message); setActiveAction(null); setConfirmText(""); return; }
+      toast.success("Restaurant deleted");
+      window.location.href = "/app";
+      return;
     }
     setActiveAction(null);
     setConfirmText("");

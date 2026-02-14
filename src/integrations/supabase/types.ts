@@ -1214,6 +1214,10 @@ export type Database = {
         }
       }
       custom_list_restaurant_id: { Args: { cl_id: string }; Returns: string }
+      delete_restaurant_cascade: {
+        Args: { p_restaurant_id: string }
+        Returns: undefined
+      }
       has_restaurant_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"]; r_id: string }
         Returns: boolean
