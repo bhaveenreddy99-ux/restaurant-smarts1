@@ -347,7 +347,7 @@ export default function EnterInventoryPage() {
     }).select().single();
     if (error) { toast.error(error.message); setSmartOrderCreating(false); return; }
 
-    const runItems = computed.map(i => ({
+     const runItems = computed.map(i => ({
       run_id: run.id,
       item_name: i.item_name,
       suggested_order: i.suggestedOrder,
@@ -355,6 +355,7 @@ export default function EnterInventoryPage() {
       current_stock: i.current_stock,
       par_level: i.par_level,
       unit_cost: i.unit_cost || null,
+      pack_size: i.pack_size || null,
     }));
     await supabase.from("smart_order_run_items").insert(runItems);
 
@@ -367,12 +368,13 @@ export default function EnterInventoryPage() {
     }).select().single();
 
     if (ph) {
-      const phItems = computed.filter(i => i.suggestedOrder > 0).map(i => ({
+       const phItems = computed.filter(i => i.suggestedOrder > 0).map(i => ({
         purchase_history_id: ph.id,
         item_name: i.item_name,
         quantity: i.suggestedOrder,
         unit_cost: i.unit_cost || null,
         total_cost: i.unit_cost ? i.suggestedOrder * Number(i.unit_cost) : null,
+        pack_size: i.pack_size || null,
       }));
       if (phItems.length > 0) {
         await supabase.from("purchase_history_items").insert(phItems);
@@ -511,10 +513,11 @@ export default function EnterInventoryPage() {
           <Card className="overflow-hidden border shadow-sm">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/30">
+               <TableRow className="bg-muted/30">
                   <TableHead className="text-xs font-semibold">Item</TableHead>
                   <TableHead className="text-xs font-semibold">Category</TableHead>
                   <TableHead className="text-xs font-semibold">Unit</TableHead>
+                  <TableHead className="text-xs font-semibold">Pack Size</TableHead>
                   <TableHead className="text-xs font-semibold">Current Stock</TableHead>
                   <TableHead className="text-xs font-semibold">PAR Level</TableHead>
                 </TableRow>
@@ -522,9 +525,10 @@ export default function EnterInventoryPage() {
               <TableBody>
                 {filteredItems.map((item) =>
                   <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
-                    <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
+                     <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
                     <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{item.unit}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{item.pack_size || "—"}</TableCell>
                     <TableCell>
                       <Input type="number" value={item.current_stock} onChange={(e) => handleUpdateStock(item.id, +e.target.value)} className="w-20 h-8 text-sm font-mono" />
                     </TableCell>
@@ -776,9 +780,10 @@ export default function EnterInventoryPage() {
           <div className="rounded-lg border overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/30">
+               <TableRow className="bg-muted/30">
                   <TableHead className="text-xs font-semibold">Item</TableHead>
                   <TableHead className="text-xs font-semibold">Category</TableHead>
+                  <TableHead className="text-xs font-semibold">Pack Size</TableHead>
                   <TableHead className="text-xs font-semibold">Stock</TableHead>
                   <TableHead className="text-xs font-semibold">PAR</TableHead>
                 </TableRow>
@@ -788,6 +793,7 @@ export default function EnterInventoryPage() {
                   <TableRow key={item.id}>
                     <TableCell className="text-sm">{item.item_name}</TableCell>
                     <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{item.pack_size || "—"}</TableCell>
                     <TableCell className="font-mono text-sm">{item.current_stock}</TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">{item.par_level}</TableCell>
                   </TableRow>

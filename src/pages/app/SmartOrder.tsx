@@ -125,8 +125,8 @@ export default function SmartOrderPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <ExportButtons
-              items={runItems.map(i => ({ ...i, suggestedOrder: i.suggested_order }))}
+             <ExportButtons
+              items={runItems.map(i => ({ ...i, suggestedOrder: i.suggested_order, pack_size: i.pack_size }))}
               filename="smart-order"
               type="smartorder"
             />
@@ -172,10 +172,11 @@ export default function SmartOrderPage() {
 
         <Card className="overflow-hidden">
           <Table>
-            <TableHeader>
+             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs font-semibold">Risk</TableHead>
                 <TableHead className="text-xs font-semibold">Item</TableHead>
+                <TableHead className="text-xs font-semibold">Pack Size</TableHead>
                 <TableHead className="text-xs font-semibold">Current</TableHead>
                 <TableHead className="text-xs font-semibold">PAR</TableHead>
                 <TableHead className="text-xs font-semibold">Order Qty</TableHead>
@@ -187,6 +188,7 @@ export default function SmartOrderPage() {
                 <TableRow key={i.id} className="hover:bg-muted/30 transition-colors">
                   <TableCell>{riskBadge(i.risk)}</TableCell>
                   <TableCell className="font-medium text-sm">{i.item_name}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{i.pack_size || "—"}</TableCell>
                   <TableCell className="font-mono text-sm">{i.current_stock}</TableCell>
                   <TableCell className="font-mono text-sm text-muted-foreground">{i.par_level}</TableCell>
                   <TableCell className="font-mono text-sm font-bold">{i.suggested_order}</TableCell>

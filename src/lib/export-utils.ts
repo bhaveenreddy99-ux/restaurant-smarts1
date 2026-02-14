@@ -23,7 +23,7 @@ const INVENTORY_COLUMNS = [
 ];
 
 const SMART_ORDER_COLUMNS = [
-  "Risk", "Item Name", "Current Stock", "PAR Level", "Suggested Order",
+  "Risk", "Item Name", "Pack Size", "Current Stock", "PAR Level", "Suggested Order",
 ];
 
 function itemToRow(item: ExportItem) {
@@ -44,6 +44,7 @@ function smartOrderRow(item: ExportItem) {
   return [
     item.risk || "",
     item.item_name || "",
+    item.pack_size || "",
     item.current_stock ?? "",
     item.par_level ?? "",
     item.suggestedOrder ?? "",

@@ -1045,6 +1045,7 @@ export type Database = {
         Row: {
           id: string
           item_name: string
+          pack_size: string | null
           purchase_history_id: string
           quantity: number
           total_cost: number | null
@@ -1053,6 +1054,7 @@ export type Database = {
         Insert: {
           id?: string
           item_name: string
+          pack_size?: string | null
           purchase_history_id: string
           quantity?: number
           total_cost?: number | null
@@ -1061,6 +1063,7 @@ export type Database = {
         Update: {
           id?: string
           item_name?: string
+          pack_size?: string | null
           purchase_history_id?: string
           quantity?: number
           total_cost?: number | null
@@ -1274,6 +1277,7 @@ export type Database = {
           current_stock: number
           id: string
           item_name: string
+          pack_size: string | null
           par_level: number
           risk: string
           run_id: string
@@ -1284,6 +1288,7 @@ export type Database = {
           current_stock?: number
           id?: string
           item_name: string
+          pack_size?: string | null
           par_level?: number
           risk?: string
           run_id: string
@@ -1294,6 +1299,7 @@ export type Database = {
           current_stock?: number
           id?: string
           item_name?: string
+          pack_size?: string | null
           par_level?: number
           risk?: string
           run_id?: string
