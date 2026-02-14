@@ -219,4 +219,16 @@
   .empty-state-description {
     @apply text-xs text-muted-foreground/70 mt-1 max-w-xs mx-auto;
   }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .safe-area-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
 }
