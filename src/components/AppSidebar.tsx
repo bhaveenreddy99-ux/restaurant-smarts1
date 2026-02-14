@@ -8,10 +8,12 @@ import {
   BarChart3,
   Users,
   ChefHat,
-  ChevronsUpDown,
   LogOut,
   Receipt,
   Settings,
+  Bell,
+  AlertTriangle as AlertIcon,
+  Clock,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
@@ -28,12 +30,6 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 
 const mainNav = [
@@ -59,16 +55,22 @@ const insightsNav = [
   { title: "Reports", url: "/app/reports", icon: BarChart3 },
 ];
 
+const notificationsNav = [
+  { title: "Notifications", url: "/app/notifications", icon: Bell },
+];
+
 const adminNav = [
   { title: "Staff", url: "/app/staff", icon: Users },
   { title: "Settings", url: "/app/settings", icon: Settings },
+  { title: "Alert Settings", url: "/app/settings/alerts", icon: AlertIcon },
+  { title: "Reminders", url: "/app/settings/reminders", icon: Clock },
 ];
 
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const { restaurants, currentRestaurant, setCurrentRestaurant } = useRestaurant();
+  const { currentRestaurant } = useRestaurant();
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/");
   const isOwner = currentRestaurant?.role === "OWNER";
@@ -107,7 +109,7 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
       <div className="p-4 pb-2">
-        <div className="flex items-center gap-2.5 mb-5">
+        <div className="flex items-center gap-2.5 mb-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary/10">
             <ChefHat className="h-4.5 w-4.5 text-sidebar-primary" />
           </div>
@@ -115,31 +117,6 @@ export function AppSidebar() {
             Resta<span className="text-sidebar-primary">rentIQ</span>
           </span>
         </div>
-
-        {/* Restaurant Switcher */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="w-full justify-between text-[13px] text-sidebar-foreground hover:bg-sidebar-accent h-9 px-3 rounded-lg"
-            >
-              <span className="truncate font-medium">{currentRestaurant?.name || "Select"}</span>
-              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            {restaurants.map((r) => (
-              <DropdownMenuItem
-                key={r.id}
-                onClick={() => setCurrentRestaurant(r)}
-                className={r.id === currentRestaurant?.id ? "bg-accent" : ""}
-              >
-                {r.name}
-                <span className="ml-auto text-[10px] text-muted-foreground font-medium">{r.role}</span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
       <SidebarContent className="px-2 pt-2">
@@ -148,6 +125,7 @@ export function AppSidebar() {
         {renderGroup("PAR", parNav)}
         {renderGroup("Operations", operationsNav)}
         {renderGroup("Insights", insightsNav)}
+        {renderGroup("Alerts", notificationsNav)}
         {isManagerPlus && renderGroup("Admin", isOwner ? adminNav : adminNav.filter(n => n.url === "/app/settings"))}
       </SidebarContent>
 

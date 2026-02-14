@@ -25,6 +25,9 @@ import ReportsPage from "@/pages/app/Reports";
 import StaffPage from "@/pages/app/Staff";
 import PurchaseHistoryPage from "@/pages/app/PurchaseHistory";
 import SettingsPage from "@/pages/app/Settings";
+import NotificationsPage from "@/pages/app/Notifications";
+import AlertSettingsPage from "@/pages/app/settings/AlertSettings";
+import ReminderSettingsPage from "@/pages/app/settings/ReminderSettings";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -59,7 +62,10 @@ const App = () => (
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="staff" element={<StaffPage />} />
                 <Route path="purchase-history" element={<PurchaseHistoryPage />} />
+                <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="settings/alerts" element={<AlertSettingsPage />} />
+                <Route path="settings/reminders" element={<ReminderSettingsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
