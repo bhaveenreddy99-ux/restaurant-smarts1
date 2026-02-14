@@ -11,6 +11,7 @@ import {
   ChevronsUpDown,
   LogOut,
   Receipt,
+  Settings,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
@@ -60,6 +61,7 @@ const insightsNav = [
 
 const adminNav = [
   { title: "Staff", url: "/app/staff", icon: Users },
+  { title: "Settings", url: "/app/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -70,6 +72,7 @@ export function AppSidebar() {
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/");
   const isOwner = currentRestaurant?.role === "OWNER";
+  const isManagerPlus = isOwner || currentRestaurant?.role === "MANAGER";
 
   const renderGroup = (label: string, items: typeof mainNav) => (
     <SidebarGroup key={label}>
@@ -145,7 +148,7 @@ export function AppSidebar() {
         {renderGroup("PAR", parNav)}
         {renderGroup("Operations", operationsNav)}
         {renderGroup("Insights", insightsNav)}
-        {isOwner && renderGroup("Admin", adminNav)}
+        {isManagerPlus && renderGroup("Admin", isOwner ? adminNav : adminNav.filter(n => n.url === "/app/settings"))}
       </SidebarContent>
 
       <SidebarFooter className="p-3">
