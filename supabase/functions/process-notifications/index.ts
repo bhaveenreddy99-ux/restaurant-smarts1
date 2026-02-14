@@ -1,0 +1,381 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+function buildAlertEmailHtml(restaurantName: string, locationName: string | null, items: any[], timestamp: string): string {
+  const rows = items.map(i => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:14px">${i.item_name}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:14px;text-align:center">${i.current_stock} / ${i.par_level}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:14px;text-align:center;color:${i.risk === 'RED' ? '#dc2626' : '#f59e0b'};font-weight:600">${i.risk}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+      <div style="background:linear-gradient(135deg,#c2410c,#ea580c);padding:24px;border-radius:12px 12px 0 0">
+        <h1 style="color:white;margin:0;font-size:20px">🚨 Low Stock Alert</h1>
+        <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:14px">${restaurantName}${locationName ? ` — ${locationName}` : ""}</p>
+      </div>
+      <div style="background:white;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px">
+        <p style="color:#6b7280;font-size:13px;margin:0 0 16px">Generated at ${timestamp}</p>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;text-transform:uppercase">Item</th>
+              <th style="padding:8px 12px;text-align:center;font-size:12px;color:#6b7280;text-transform:uppercase">Stock / PAR</th>
+              <th style="padding:8px 12px;text-align:center;font-size:12px;color:#6b7280;text-transform:uppercase">Risk</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="margin-top:20px;padding:12px;background:#fef3c7;border-radius:8px;font-size:13px;color:#92400e">
+          ⚡ Review your inventory and consider placing a Smart Order.
+        </div>
+      </div>
+      <p style="text-align:center;color:#9ca3af;font-size:11px;margin-top:16px">RestarentIQ — Inventory Intelligence</p>
+    </div>
+  `;
+}
+
+function buildDigestEmailHtml(userName: string, groups: any[]): string {
+  const sections = groups.map(g => {
+    const rows = g.items.map((i: any) => `<li style="font-size:13px;color:#374151;margin:4px 0">${i.item_name}: ${i.current_stock}/${i.par_level} <span style="color:${i.risk === 'RED' ? '#dc2626' : '#f59e0b'};font-weight:600">${i.risk}</span></li>`).join("");
+    return `
+      <div style="margin-bottom:16px">
+        <h3 style="font-size:15px;color:#111827;margin:0 0 8px">${g.restaurantName}${g.locationName ? ` — ${g.locationName}` : ""}</h3>
+        <ul style="margin:0;padding-left:20px">${rows}</ul>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+      <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:24px;border-radius:12px 12px 0 0">
+        <h1 style="color:white;margin:0;font-size:20px">📋 Daily Inventory Digest</h1>
+        <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:14px">Hi ${userName}</p>
+      </div>
+      <div style="background:white;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px">
+        ${sections}
+      </div>
+      <p style="text-align:center;color:#9ca3af;font-size:11px;margin-top:16px">RestarentIQ — Inventory Intelligence</p>
+    </div>
+  `;
+}
+
+function buildReminderEmailHtml(restaurantName: string, locationName: string | null, reminderName: string, timestamp: string): string {
+  return `
+    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+      <div style="background:linear-gradient(135deg,#0284c7,#0ea5e9);padding:24px;border-radius:12px 12px 0 0">
+        <h1 style="color:white;margin:0;font-size:20px">⏰ Inventory Reminder</h1>
+        <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:14px">${restaurantName}${locationName ? ` — ${locationName}` : ""}</p>
+      </div>
+      <div style="background:white;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px">
+        <h2 style="font-size:16px;color:#111827;margin:0 0 8px">${reminderName}</h2>
+        <p style="color:#6b7280;font-size:14px;margin:0">It's time to enter your inventory counts. Please log in and complete your inventory entry.</p>
+        <p style="color:#9ca3af;font-size:12px;margin:16px 0 0">Scheduled for: ${timestamp}</p>
+      </div>
+      <p style="text-align:center;color:#9ca3af;font-size:11px;margin-top:16px">RestarentIQ — Inventory Intelligence</p>
+    </div>
+  `;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    const now = new Date();
+    const results: string[] = [];
+
+    // ─── 1) Process Low Stock Alerts ───
+    // Get all restaurants and their latest approved sessions
+    const { data: restaurants } = await supabase.from("restaurants").select("id, name");
+    
+    for (const restaurant of restaurants || []) {
+      // Get latest approved session per inventory list
+      const { data: sessions } = await supabase
+        .from("inventory_sessions")
+        .select("id, inventory_list_id, location_id")
+        .eq("restaurant_id", restaurant.id)
+        .eq("status", "APPROVED")
+        .order("approved_at", { ascending: false });
+
+      if (!sessions?.length) continue;
+
+      // Deduplicate to latest per list
+      const seenLists = new Set<string>();
+      const latestSessions = sessions.filter(s => {
+        if (seenLists.has(s.inventory_list_id)) return false;
+        seenLists.add(s.inventory_list_id);
+        return true;
+      });
+
+      for (const session of latestSessions) {
+        const { data: items } = await supabase
+          .from("inventory_session_items")
+          .select("*")
+          .eq("session_id", session.id);
+
+        if (!items?.length) continue;
+
+        const alertItems = items.filter(i => {
+          const ratio = i.current_stock / Math.max(i.par_level, 1);
+          return ratio < 1;
+        }).map(i => ({
+          ...i,
+          risk: (i.current_stock / Math.max(i.par_level, 1)) < 0.5 ? "RED" : "YELLOW",
+        }));
+
+        if (alertItems.length === 0) continue;
+
+        // Get members of this restaurant
+        const { data: members } = await supabase
+          .from("restaurant_members")
+          .select("user_id")
+          .eq("restaurant_id", restaurant.id);
+
+        for (const member of members || []) {
+          // Check preferences
+          const { data: pref } = await supabase
+            .from("notification_preferences")
+            .select("*")
+            .eq("restaurant_id", restaurant.id)
+            .eq("user_id", member.user_id)
+            .maybeSingle();
+
+          const shouldAlertRed = pref?.low_stock_red ?? true;
+          const shouldAlertYellow = pref?.low_stock_yellow ?? false;
+
+          const filteredItems = alertItems.filter(i =>
+            (i.risk === "RED" && shouldAlertRed) || (i.risk === "YELLOW" && shouldAlertYellow)
+          );
+
+          if (filteredItems.length === 0) continue;
+
+          const redCount = filteredItems.filter(i => i.risk === "RED").length;
+          const yellowCount = filteredItems.filter(i => i.risk === "YELLOW").length;
+
+          // Check if we already created a notification for this user+restaurant today
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const { data: existing } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", member.user_id)
+            .eq("restaurant_id", restaurant.id)
+            .eq("type", "LOW_STOCK")
+            .gte("created_at", todayStart.toISOString())
+            .limit(1);
+
+          if (existing?.length) continue; // Already notified today
+
+          // Create in-app notification
+          const channelInApp = pref?.channel_in_app ?? true;
+          if (channelInApp) {
+            await supabase.from("notifications").insert({
+              restaurant_id: restaurant.id,
+              location_id: session.location_id,
+              user_id: member.user_id,
+              type: "LOW_STOCK",
+              title: `${redCount} critical, ${yellowCount} low stock items`,
+              message: `${restaurant.name}: ${filteredItems.map(i => i.item_name).slice(0, 5).join(", ")}${filteredItems.length > 5 ? ` and ${filteredItems.length - 5} more` : ""}`,
+              severity: redCount > 0 ? "CRITICAL" : "WARNING",
+              data: { items: filteredItems.map(i => ({ item_name: i.item_name, current_stock: i.current_stock, par_level: i.par_level, risk: i.risk })) },
+            });
+          }
+
+          // Send email if IMMEDIATE
+          const channelEmail = pref?.channel_email ?? true;
+          const digestMode = pref?.email_digest_mode ?? "IMMEDIATE";
+
+          if (channelEmail && digestMode === "IMMEDIATE") {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("email")
+              .eq("id", member.user_id)
+              .single();
+
+            if (profile?.email) {
+              const locationName = session.location_id ? (await supabase.from("locations").select("name").eq("id", session.location_id).single())?.data?.name : null;
+              const html = buildAlertEmailHtml(restaurant.name, locationName, filteredItems, now.toISOString());
+
+              // Call send-email function
+              await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+                body: JSON.stringify({ to: profile.email, subject: `⚠️ Low Stock Alert — ${restaurant.name}`, html }),
+              });
+
+              results.push(`Sent alert email to ${profile.email} for ${restaurant.name}`);
+            }
+          }
+        }
+      }
+    }
+
+    // ─── 2) Process Reminders ───
+    const currentMinute = now.getMinutes();
+    const dayMap: Record<number, string> = { 0: "SUN", 1: "MON", 2: "TUE", 3: "WED", 4: "THU", 5: "FRI", 6: "SAT" };
+
+    const { data: reminders } = await supabase
+      .from("reminders")
+      .select("*, reminder_targets(user_id), restaurants(name), locations(name)")
+      .eq("is_enabled", true);
+
+    for (const reminder of reminders || []) {
+      // Check if current time matches (within 5 min window)
+      const [targetHour, targetMin] = (reminder.time_of_day || "21:00").split(":").map(Number);
+      
+      // Simple timezone offset (approximate)
+      const tzOffsets: Record<string, number> = {
+        "America/New_York": -5, "America/Chicago": -6, "America/Denver": -7, "America/Los_Angeles": -8,
+      };
+      const offset = tzOffsets[reminder.timezone] ?? -5;
+      const utcHour = (targetHour - offset + 24) % 24;
+
+      const nowUTC = now.getUTCHours();
+      const nowMin = now.getUTCMinutes();
+
+      // Check within 5-min window
+      if (nowUTC !== utcHour || Math.abs(nowMin - targetMin) > 4) continue;
+
+      // Check day of week
+      const dayInTz = dayMap[now.getUTCDay()]; // Simplified
+      const days = reminder.days_of_week as string[];
+      if (!days?.includes(dayInTz)) continue;
+
+      // Check if already sent today
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+
+      for (const target of reminder.reminder_targets || []) {
+        const { data: existing } = await supabase
+          .from("notifications")
+          .select("id")
+          .eq("user_id", target.user_id)
+          .eq("type", "REMINDER")
+          .eq("restaurant_id", reminder.restaurant_id)
+          .gte("created_at", todayStart.toISOString())
+          .limit(1);
+
+        if (existing?.length) continue;
+
+        await supabase.from("notifications").insert({
+          restaurant_id: reminder.restaurant_id,
+          location_id: reminder.location_id,
+          user_id: target.user_id,
+          type: "REMINDER",
+          title: reminder.name,
+          message: `Time to enter inventory for ${reminder.restaurants?.name || "your restaurant"}`,
+          severity: "INFO",
+          data: { reminder_id: reminder.id },
+        });
+
+        // Send email
+        const { data: pref } = await supabase
+          .from("notification_preferences")
+          .select("*")
+          .eq("restaurant_id", reminder.restaurant_id)
+          .eq("user_id", target.user_id)
+          .maybeSingle();
+
+        if (pref?.channel_email !== false && (pref?.email_digest_mode ?? "IMMEDIATE") === "IMMEDIATE") {
+          const { data: profile } = await supabase.from("profiles").select("email").eq("id", target.user_id).single();
+          if (profile?.email) {
+            const html = buildReminderEmailHtml(
+              reminder.restaurants?.name || "Restaurant",
+              reminder.locations?.name || null,
+              reminder.name,
+              now.toISOString()
+            );
+            await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+              body: JSON.stringify({ to: profile.email, subject: `⏰ Reminder: ${reminder.name}`, html }),
+            });
+            results.push(`Sent reminder email to ${profile.email}`);
+          }
+        }
+      }
+    }
+
+    // ─── 3) Process Daily Digests ───
+    // Find users whose digest hour matches now
+    const { data: digestPrefs } = await supabase
+      .from("notification_preferences")
+      .select("*")
+      .eq("email_digest_mode", "DAILY_DIGEST")
+      .eq("channel_email", true);
+
+    for (const pref of digestPrefs || []) {
+      const tzOffsets: Record<string, number> = {
+        "America/New_York": -5, "America/Chicago": -6, "America/Denver": -7, "America/Los_Angeles": -8,
+      };
+      const offset = tzOffsets[pref.timezone] ?? -5;
+      const userHourUTC = (pref.digest_hour - offset + 24) % 24;
+
+      if (now.getUTCHours() !== userHourUTC || now.getUTCMinutes() > 4) continue;
+
+      // Get unread notifications from last 24h that haven't been emailed
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const { data: pendingNotifs } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", pref.user_id)
+        .eq("restaurant_id", pref.restaurant_id)
+        .is("emailed_at", null)
+        .gte("created_at", yesterday.toISOString());
+
+      if (!pendingNotifs?.length) continue;
+
+      const { data: profile } = await supabase.from("profiles").select("email, full_name").eq("id", pref.user_id).single();
+      if (!profile?.email) continue;
+
+      // Group by restaurant/location
+      const { data: restaurant } = await supabase.from("restaurants").select("name").eq("id", pref.restaurant_id).single();
+      
+      const groups = [{
+        restaurantName: restaurant?.name || "Restaurant",
+        locationName: null as string | null,
+        items: pendingNotifs
+          .filter(n => n.data?.items)
+          .flatMap((n: any) => n.data.items || []),
+      }];
+
+      if (groups[0].items.length > 0) {
+        const html = buildDigestEmailHtml(profile.full_name || "Team Member", groups);
+        await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({ to: profile.email, subject: `📋 Daily Inventory Digest`, html }),
+        });
+
+        // Mark as emailed
+        const ids = pendingNotifs.map(n => n.id);
+        for (const id of ids) {
+          await supabase.from("notifications").update({ emailed_at: now.toISOString() }).eq("id", id);
+        }
+        results.push(`Sent digest to ${profile.email}`);
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, processed: results.length, details: results }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("Process notifications error:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
