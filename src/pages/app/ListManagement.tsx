@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, ListChecks, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function ListManagementPage() {
   const { currentRestaurant } = useRestaurant();
@@ -21,6 +22,18 @@ export default function ListManagementPage() {
   const [itemOpen, setItemOpen] = useState(false);
   const [newList, setNewList] = useState("");
   const [newItem, setNewItem] = useState({ item_name: "", quantity: 0, unit: "" });
+
+  const handleDeleteList = async (listId: string) => {
+    // Delete items first, then the list
+    await supabase.from("custom_list_items").delete().eq("list_id", listId);
+    const { error } = await supabase.from("custom_lists").delete().eq("id", listId);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("List deleted");
+      if (selected?.id === listId) { setSelected(null); setItems([]); }
+      fetchLists();
+    }
+  };
 
   const fetchLists = async () => {
     if (!currentRestaurant) return;
@@ -68,7 +81,26 @@ export default function ListManagementPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         {lists.map(l => (
           <Card key={l.id} className={`cursor-pointer hover:shadow-md transition-shadow ${selected?.id === l.id ? "ring-2 ring-primary" : ""}`} onClick={() => { setSelected(l); fetchItems(l.id); }}>
-            <CardHeader className="pb-2"><CardTitle className="text-base">{l.name}</CardTitle></CardHeader>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-base">{l.name}</CardTitle>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={e => e.stopPropagation()}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={e => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete "{l.name}"?</AlertDialogTitle>
+                    <AlertDialogDescription>This will permanently delete the list and all its items.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleDeleteList(l.id)}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardHeader>
             <CardContent><p className="text-xs text-muted-foreground">{new Date(l.created_at).toLocaleDateString()}</p></CardContent>
           </Card>
         ))}
