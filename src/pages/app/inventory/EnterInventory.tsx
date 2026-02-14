@@ -14,13 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-  BreadcrumbPage, BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+  BreadcrumbPage, BreadcrumbSeparator } from
+"@/components/ui/breadcrumb";
 import { toast } from "sonner";
 import {
   Plus, Send, Package, BookOpen, Play, ArrowLeft, Eye, CheckCircle,
-  XCircle, ShoppingCart, Copy, Clock, ClipboardCheck, Trash2, ChevronRight,
-} from "lucide-react";
+  XCircle, ShoppingCart, Copy, Clock, ClipboardCheck, Trash2, ChevronRight } from
+"lucide-react";
 
 const defaultCategories = ["Frozen", "Cooler", "Dry"];
 
@@ -63,13 +63,13 @@ export default function EnterInventoryPage() {
   // Fetch lists
   useEffect(() => {
     if (!currentRestaurant) return;
-    supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id)
-      .then(({ data }) => {
-        if (data) {
-          setLists(data);
-          if (data.length > 0 && !selectedList) setSelectedList(data[0].id);
-        }
-      });
+    supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id).
+    then(({ data }) => {
+      if (data) {
+        setLists(data);
+        if (data.length > 0 && !selectedList) setSelectedList(data[0].id);
+      }
+    });
   }, [currentRestaurant]);
 
   // Fetch sessions when list changes
@@ -85,45 +85,45 @@ export default function EnterInventoryPage() {
     const baseQuery = supabase.from("inventory_sessions").select("*, inventory_lists(name), inventory_session_items(id)").eq("restaurant_id", currentRestaurant.id);
 
     // In Progress
-    const { data: ip } = await supabase.from("inventory_sessions")
-      .select("*, inventory_lists(name)")
-      .eq("restaurant_id", currentRestaurant.id)
-      .eq("status", "IN_PROGRESS")
-      .order("updated_at", { ascending: false });
-    setInProgressSessions((ip || []).filter(s => !selectedList || s.inventory_list_id === selectedList));
+    const { data: ip } = await supabase.from("inventory_sessions").
+    select("*, inventory_lists(name)").
+    eq("restaurant_id", currentRestaurant.id).
+    eq("status", "IN_PROGRESS").
+    order("updated_at", { ascending: false });
+    setInProgressSessions((ip || []).filter((s) => !selectedList || s.inventory_list_id === selectedList));
 
     // Review
-    const { data: rv } = await supabase.from("inventory_sessions")
-      .select("*, inventory_lists(name)")
-      .eq("restaurant_id", currentRestaurant.id)
-      .eq("status", "IN_REVIEW")
-      .order("updated_at", { ascending: false });
-    setReviewSessions((rv || []).filter(s => !selectedList || s.inventory_list_id === selectedList));
+    const { data: rv } = await supabase.from("inventory_sessions").
+    select("*, inventory_lists(name)").
+    eq("restaurant_id", currentRestaurant.id).
+    eq("status", "IN_REVIEW").
+    order("updated_at", { ascending: false });
+    setReviewSessions((rv || []).filter((s) => !selectedList || s.inventory_list_id === selectedList));
 
     // Approved with date filter
     const daysAgo = new Date();
     daysAgo.setDate(daysAgo.getDate() - parseInt(approvedFilter));
-    const { data: ap } = await supabase.from("inventory_sessions")
-      .select("*, inventory_lists(name)")
-      .eq("restaurant_id", currentRestaurant.id)
-      .eq("status", "APPROVED")
-      .gte("approved_at", daysAgo.toISOString())
-      .order("approved_at", { ascending: false });
-    setApprovedSessions((ap || []).filter(s => !selectedList || s.inventory_list_id === selectedList));
+    const { data: ap } = await supabase.from("inventory_sessions").
+    select("*, inventory_lists(name)").
+    eq("restaurant_id", currentRestaurant.id).
+    eq("status", "APPROVED").
+    gte("approved_at", daysAgo.toISOString()).
+    order("approved_at", { ascending: false });
+    setApprovedSessions((ap || []).filter((s) => !selectedList || s.inventory_list_id === selectedList));
 
     setLoading(false);
   };
 
   // PAR guides for selected list
   useEffect(() => {
-    if (!currentRestaurant || !selectedList) { setParGuides([]); return; }
-    supabase.from("par_guides").select("*").eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList)
-      .then(({ data }) => { if (data) setParGuides(data); });
+    if (!currentRestaurant || !selectedList) {setParGuides([]);return;}
+    supabase.from("par_guides").select("*").eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList).
+    then(({ data }) => {if (data) setParGuides(data);});
   }, [currentRestaurant, selectedList]);
 
   useEffect(() => {
-    if (!selectedPar) { setParItems([]); return; }
-    supabase.from("par_guide_items").select("*").eq("par_guide_id", selectedPar).then(({ data }) => { if (data) setParItems(data); });
+    if (!selectedPar) {setParItems([]);return;}
+    supabase.from("par_guide_items").select("*").eq("par_guide_id", selectedPar).then(({ data }) => {if (data) setParItems(data);});
   }, [selectedPar]);
 
   // Create session
@@ -133,19 +133,19 @@ export default function EnterInventoryPage() {
       restaurant_id: currentRestaurant.id,
       inventory_list_id: selectedList,
       name: sessionName,
-      created_by: user.id,
+      created_by: user.id
     }).select().single();
-    if (error) { toast.error(error.message); return; }
+    if (error) {toast.error(error.message);return;}
 
     // Pre-populate from catalog
-    const { data: catItems } = await supabase.from("inventory_catalog_items").select("*")
-      .eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList);
+    const { data: catItems } = await supabase.from("inventory_catalog_items").select("*").
+    eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList);
 
     const parMap: Record<string, number> = {};
-    parItems.forEach(p => { parMap[p.item_name] = Number(p.par_level); });
+    parItems.forEach((p) => {parMap[p.item_name] = Number(p.par_level);});
 
     if (catItems && catItems.length > 0) {
-      const preItems = catItems.map(ci => ({
+      const preItems = catItems.map((ci) => ({
         session_id: data.id,
         item_name: ci.item_name,
         category: ci.category || "Dry",
@@ -155,17 +155,17 @@ export default function EnterInventoryPage() {
         unit_cost: ci.default_unit_cost || null,
         vendor_sku: ci.vendor_sku || null,
         pack_size: ci.pack_size || null,
-        vendor_name: ci.vendor_name || null,
+        vendor_name: ci.vendor_name || null
       }));
       await supabase.from("inventory_session_items").insert(preItems);
     } else if (parItems.length > 0) {
-      const preItems = parItems.map(p => ({
+      const preItems = parItems.map((p) => ({
         session_id: data.id,
         item_name: p.item_name,
         category: p.category || "Dry",
         unit: p.unit || "",
         current_stock: 0,
-        par_level: p.par_level,
+        par_level: p.par_level
       }));
       await supabase.from("inventory_session_items").insert(preItems);
     }
@@ -184,8 +184,8 @@ export default function EnterInventoryPage() {
     if (data) setItems(data);
     // Fetch catalog for "From Catalog" button
     if (currentRestaurant) {
-      const { data: cats } = await supabase.from("inventory_catalog_items").select("*")
-        .eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", session.inventory_list_id);
+      const { data: cats } = await supabase.from("inventory_catalog_items").select("*").
+      eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", session.inventory_list_id);
       if (cats) setCatalogItems(cats);
     }
   };
@@ -194,7 +194,7 @@ export default function EnterInventoryPage() {
     if (!activeSession) return;
     const payload = { session_id: activeSession.id, ...newItem };
     const { data, error } = await supabase.from("inventory_session_items").insert(payload).select().single();
-    if (error) { toast.error(error.message); return; }
+    if (error) {toast.error(error.message);return;}
     setItems([...items, data]);
     setNewItem({ item_name: "", category: "Cooler", unit: "", current_stock: 0, par_level: 0, unit_cost: 0 });
     setCreateOpen(false);
@@ -212,44 +212,44 @@ export default function EnterInventoryPage() {
       unit_cost: catalogItem.default_unit_cost || 0,
       vendor_sku: catalogItem.vendor_sku || null,
       pack_size: catalogItem.pack_size || null,
-      vendor_name: catalogItem.vendor_name || null,
+      vendor_name: catalogItem.vendor_name || null
     };
     const { data, error } = await supabase.from("inventory_session_items").insert(payload).select().single();
-    if (error) { toast.error(error.message); return; }
+    if (error) {toast.error(error.message);return;}
     setItems([...items, data]);
     toast.success(`Added ${catalogItem.item_name}`);
   };
 
   const handleUpdateStock = async (id: string, stock: number) => {
     await supabase.from("inventory_session_items").update({ current_stock: stock }).eq("id", id);
-    setItems(items.map(i => i.id === id ? { ...i, current_stock: stock } : i));
+    setItems(items.map((i) => i.id === id ? { ...i, current_stock: stock } : i));
   };
 
   const handleSubmitForReview = async () => {
     if (!activeSession) return;
     const { error } = await supabase.from("inventory_sessions").update({ status: "IN_REVIEW", updated_at: new Date().toISOString() }).eq("id", activeSession.id);
-    if (error) toast.error(error.message);
-    else { toast.success("Submitted for review!"); setActiveSession(null); setItems([]); fetchSessions(); }
+    if (error) toast.error(error.message);else
+    {toast.success("Submitted for review!");setActiveSession(null);setItems([]);fetchSessions();}
   };
 
   const handleClearSession = async (sessionId: string) => {
     const { error } = await supabase.from("inventory_sessions").delete().eq("id", sessionId);
-    if (error) toast.error(error.message);
-    else { toast.success("Session cleared"); fetchSessions(); }
+    if (error) toast.error(error.message);else
+    {toast.success("Session cleared");fetchSessions();}
   };
 
   const handleApprove = async (sessionId: string) => {
     const { error } = await supabase.from("inventory_sessions").update({
-      status: "APPROVED", approved_at: new Date().toISOString(), approved_by: user?.id, updated_at: new Date().toISOString(),
+      status: "APPROVED", approved_at: new Date().toISOString(), approved_by: user?.id, updated_at: new Date().toISOString()
     }).eq("id", sessionId);
-    if (error) toast.error(error.message);
-    else { toast.success("Session approved!"); fetchSessions(); }
+    if (error) toast.error(error.message);else
+    {toast.success("Session approved!");fetchSessions();}
   };
 
   const handleReject = async (sessionId: string) => {
     const { error } = await supabase.from("inventory_sessions").update({ status: "IN_PROGRESS", updated_at: new Date().toISOString() }).eq("id", sessionId);
-    if (error) toast.error(error.message);
-    else { toast.success("Session sent back"); fetchSessions(); }
+    if (error) toast.error(error.message);else
+    {toast.success("Session sent back");fetchSessions();}
   };
 
   const handleView = async (session: any) => {
@@ -264,9 +264,9 @@ export default function EnterInventoryPage() {
       restaurant_id: currentRestaurant.id,
       inventory_list_id: session.inventory_list_id,
       name: `${session.name} (copy)`,
-      created_by: user.id,
+      created_by: user.id
     }).select().single();
-    if (error) { toast.error(error.message); return; }
+    if (error) {toast.error(error.message);return;}
     const { data: srcItems } = await supabase.from("inventory_session_items").select("*").eq("session_id", session.id);
     if (srcItems && srcItems.length > 0) {
       const duped = srcItems.map(({ id, session_id, ...rest }) => ({ ...rest, session_id: newSess.id }));
@@ -278,23 +278,23 @@ export default function EnterInventoryPage() {
 
   const isManagerOrOwner = currentRestaurant?.role === "OWNER" || currentRestaurant?.role === "MANAGER";
 
-  const filteredItems = items.filter(i => {
+  const filteredItems = items.filter((i) => {
     if (filterCategory !== "all" && i.category !== filterCategory) return false;
     if (search && !i.item_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
-  const categories = [...new Set(items.map(i => i.category).filter(Boolean))];
+  const categories = [...new Set(items.map((i) => i.category).filter(Boolean))];
 
-  const selectedListName = lists.find(l => l.id === selectedList)?.name || "";
+  const selectedListName = lists.find((l) => l.id === selectedList)?.name || "";
 
   if (loading && lists.length === 0) {
     return (
       <div className="space-y-6 animate-fade-in">
         <Skeleton className="h-6 w-40" />
         <Skeleton className="h-10 w-64" />
-        {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 rounded-xl" />)}
-      </div>
-    );
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
+      </div>);
+
   }
 
   // ─── SESSION EDITOR ────────────────────────────
@@ -305,7 +305,7 @@ export default function EnterInventoryPage() {
           <BreadcrumbList>
             <BreadcrumbItem><BreadcrumbLink href="/app/dashboard">Home</BreadcrumbLink></BreadcrumbItem>
             <BreadcrumbSeparator />
-            <BreadcrumbItem><BreadcrumbLink className="cursor-pointer" onClick={() => { setActiveSession(null); fetchSessions(); }}>Inventory management</BreadcrumbLink></BreadcrumbItem>
+            <BreadcrumbItem><BreadcrumbLink className="cursor-pointer" onClick={() => {setActiveSession(null);fetchSessions();}}>Inventory management</BreadcrumbLink></BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem><BreadcrumbPage>{activeSession.name}</BreadcrumbPage></BreadcrumbItem>
           </BreadcrumbList>
@@ -313,7 +313,7 @@ export default function EnterInventoryPage() {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setActiveSession(null); fetchSessions(); }}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {setActiveSession(null);fetchSessions();}}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
@@ -327,14 +327,14 @@ export default function EnterInventoryPage() {
         </div>
 
         <div className="flex flex-wrap gap-2.5 items-center">
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search items..." className="max-w-xs h-9" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items..." className="max-w-xs h-9" />
           <Select value={filterCategory} onValueChange={setFilterCategory}>
             <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              {[...defaultCategories, ...categories.filter(c => !defaultCategories.includes(c))].map(c => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              ))}
+              {[...defaultCategories, ...categories.filter((c) => !defaultCategories.includes(c))].map((c) =>
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+              )}
             </SelectContent>
           </Select>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -344,58 +344,58 @@ export default function EnterInventoryPage() {
             <DialogContent>
               <DialogHeader><DialogTitle>Add Item</DialogTitle></DialogHeader>
               <div className="space-y-3">
-                <div className="space-y-1"><Label>Item Name</Label><Input value={newItem.item_name} onChange={e => setNewItem({ ...newItem, item_name: e.target.value })} className="h-10" /></div>
+                <div className="space-y-1"><Label>Item Name</Label><Input value={newItem.item_name} onChange={(e) => setNewItem({ ...newItem, item_name: e.target.value })} className="h-10" /></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1"><Label>Category</Label>
-                    <Select value={newItem.category} onValueChange={v => setNewItem({ ...newItem, category: v })}>
+                    <Select value={newItem.category} onValueChange={(v) => setNewItem({ ...newItem, category: v })}>
                       <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                      <SelectContent>{defaultCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                      <SelectContent>{defaultCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1"><Label>Unit</Label><Input value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })} placeholder="lbs, packs..." className="h-10" /></div>
+                  <div className="space-y-1"><Label>Unit</Label><Input value={newItem.unit} onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })} placeholder="lbs, packs..." className="h-10" /></div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1"><Label>Stock</Label><Input type="number" value={newItem.current_stock} onChange={e => setNewItem({ ...newItem, current_stock: +e.target.value })} className="h-10" /></div>
-                  <div className="space-y-1"><Label>PAR Level</Label><Input type="number" value={newItem.par_level} onChange={e => setNewItem({ ...newItem, par_level: +e.target.value })} className="h-10" /></div>
-                  <div className="space-y-1"><Label>Unit Cost</Label><Input type="number" value={newItem.unit_cost} onChange={e => setNewItem({ ...newItem, unit_cost: +e.target.value })} className="h-10" /></div>
+                  <div className="space-y-1"><Label>Stock</Label><Input type="number" value={newItem.current_stock} onChange={(e) => setNewItem({ ...newItem, current_stock: +e.target.value })} className="h-10" /></div>
+                  <div className="space-y-1"><Label>PAR Level</Label><Input type="number" value={newItem.par_level} onChange={(e) => setNewItem({ ...newItem, par_level: +e.target.value })} className="h-10" /></div>
+                  <div className="space-y-1"><Label>Unit Cost</Label><Input type="number" value={newItem.unit_cost} onChange={(e) => setNewItem({ ...newItem, unit_cost: +e.target.value })} className="h-10" /></div>
                 </div>
                 <Button onClick={handleAddItem} className="w-full bg-gradient-amber">Add</Button>
               </div>
             </DialogContent>
           </Dialog>
-          {catalogItems.length > 0 && (
-            <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
+          {catalogItems.length > 0 &&
+          <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="gap-1.5 h-9"><BookOpen className="h-3.5 w-3.5" /> From Catalog</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader><DialogTitle>Add from Catalog</DialogTitle></DialogHeader>
                 <div className="max-h-80 overflow-y-auto space-y-0.5">
-                  {catalogItems.map(ci => (
-                    <div key={ci.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  {catalogItems.map((ci) =>
+                <div key={ci.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
                       <div>
                         <p className="text-sm font-medium">{ci.item_name}</p>
                         <p className="text-[11px] text-muted-foreground">{[ci.category, ci.unit, ci.vendor_name].filter(Boolean).join(" · ")}</p>
                       </div>
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleAddFromCatalog(ci)}><Plus className="h-4 w-4" /></Button>
                     </div>
-                  ))}
+                )}
                 </div>
               </DialogContent>
             </Dialog>
-          )}
+          }
         </div>
 
-        {filteredItems.length === 0 ? (
-          <Card className="border shadow-sm">
+        {filteredItems.length === 0 ?
+        <Card className="border shadow-sm">
             <CardContent className="empty-state">
               <Package className="empty-state-icon" />
               <p className="empty-state-title">No items yet</p>
               <p className="empty-state-description">Add items manually or from your catalog to start counting.</p>
             </CardContent>
-          </Card>
-        ) : (
-          <Card className="overflow-hidden border shadow-sm">
+          </Card> :
+
+        <Card className="overflow-hidden border shadow-sm">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
@@ -407,23 +407,23 @@ export default function EnterInventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredItems.map(item => (
-                  <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
+                {filteredItems.map((item) =>
+              <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
                     <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
                     <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{item.unit}</TableCell>
                     <TableCell>
-                      <Input type="number" value={item.current_stock} onChange={e => handleUpdateStock(item.id, +e.target.value)} className="w-20 h-8 text-sm font-mono" />
+                      <Input type="number" value={item.current_stock} onChange={(e) => handleUpdateStock(item.id, +e.target.value)} className="w-20 h-8 text-sm font-mono" />
                     </TableCell>
                     <TableCell className="text-sm font-mono text-muted-foreground">{item.par_level}</TableCell>
                   </TableRow>
-                ))}
+              )}
               </TableBody>
             </Table>
           </Card>
-        )}
-      </div>
-    );
+        }
+      </div>);
+
   }
 
   // ─── MAIN DASHBOARD: 3 STACKED CARDS ──────────
@@ -449,24 +449,24 @@ export default function EnterInventoryPage() {
             <Select value={selectedList} onValueChange={setSelectedList}>
               <SelectTrigger className="h-8 w-48 text-xs"><SelectValue placeholder="Inventory List" /></SelectTrigger>
               <SelectContent>
-                {lists.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                {lists.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          {inProgressSessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
+          {inProgressSessions.length === 0 ?
+          <div className="flex flex-col items-center justify-center py-10 text-center">
               <Clock className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <p className="text-sm text-muted-foreground mb-4">No inventory in progress</p>
               <Button className="bg-gradient-amber shadow-amber gap-2" onClick={() => setStartOpen(true)}>
                 <Play className="h-4 w-4" /> Start inventory
               </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {inProgressSessions.map(s => (
-                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
+            </div> :
+
+          <div className="space-y-2">
+              {inProgressSessions.map((s) =>
+            <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
                   <div className="flex-1">
                     <p className="text-sm font-medium">{s.name}</p>
                     <p className="text-[11px] text-muted-foreground">{s.inventory_lists?.name}</p>
@@ -484,9 +484,9 @@ export default function EnterInventoryPage() {
                     </Button>
                   </div>
                 </div>
-              ))}
+            )}
             </div>
-          )}
+          }
         </CardContent>
       </Card>
 
@@ -496,15 +496,15 @@ export default function EnterInventoryPage() {
           <CardTitle className="text-base font-semibold">Review</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          {reviewSessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
+          {reviewSessions.length === 0 ?
+          <div className="text-center items-center justify-center flex flex-row py-0">
               <ClipboardCheck className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <p className="text-sm text-muted-foreground">No inventory</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {reviewSessions.map(s => (
-                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
+            </div> :
+
+          <div className="space-y-2">
+              {reviewSessions.map((s) =>
+            <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
                   <div className="flex-1">
                     <p className="text-sm font-medium">{s.name}</p>
                     <p className="text-[11px] text-muted-foreground">{s.inventory_lists?.name} • {new Date(s.updated_at).toLocaleDateString()}</p>
@@ -514,8 +514,8 @@ export default function EnterInventoryPage() {
                     <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleView(s)}>
                       <Eye className="h-3.5 w-3.5" /> View
                     </Button>
-                    {isManagerOrOwner && (
-                      <>
+                    {isManagerOrOwner &&
+                <>
                         <Button size="sm" className="bg-success hover:bg-success/90 gap-1.5 h-8 text-xs text-success-foreground" onClick={() => handleApprove(s.id)}>
                           <CheckCircle className="h-3.5 w-3.5" /> Approve
                         </Button>
@@ -523,12 +523,12 @@ export default function EnterInventoryPage() {
                           <XCircle className="h-3.5 w-3.5" /> Reject
                         </Button>
                       </>
-                    )}
+                }
                   </div>
                 </div>
-              ))}
+            )}
             </div>
-          )}
+          }
         </CardContent>
       </Card>
 
@@ -546,15 +546,15 @@ export default function EnterInventoryPage() {
           </Select>
         </CardHeader>
         <CardContent className="pt-0">
-          {approvedSessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
+          {approvedSessions.length === 0 ?
+          <div className="flex flex-col items-center justify-center py-10 text-center">
               <CheckCircle className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <p className="text-sm text-muted-foreground">No inventory</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {approvedSessions.map(s => (
-                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
+            </div> :
+
+          <div className="space-y-2">
+              {approvedSessions.map((s) =>
+            <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium">{s.name}</p>
@@ -574,9 +574,9 @@ export default function EnterInventoryPage() {
                     </Button>
                   </div>
                 </div>
-              ))}
+            )}
             </div>
-          )}
+          }
         </CardContent>
       </Card>
 
@@ -587,9 +587,9 @@ export default function EnterInventoryPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Inventory List</Label>
-              <Select value={selectedList} onValueChange={v => { setSelectedList(v); setSelectedPar(""); }}>
+              <Select value={selectedList} onValueChange={(v) => {setSelectedList(v);setSelectedPar("");}}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="Select list" /></SelectTrigger>
-                <SelectContent>{lists.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{lists.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
@@ -598,13 +598,13 @@ export default function EnterInventoryPage() {
                 <SelectTrigger className="h-10"><SelectValue placeholder="None" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {parGuides.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  {parGuides.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>Session Name</Label>
-              <Input value={sessionName} onChange={e => setSessionName(e.target.value)} placeholder="e.g. Monday AM Count" className="h-10" />
+              <Input value={sessionName} onChange={(e) => setSessionName(e.target.value)} placeholder="e.g. Monday AM Count" className="h-10" />
             </div>
             <Button onClick={handleCreateSession} className="w-full bg-gradient-amber" disabled={!selectedList || !sessionName}>Start Session</Button>
           </div>
@@ -612,7 +612,7 @@ export default function EnterInventoryPage() {
       </Dialog>
 
       {/* View Session Dialog */}
-      <Dialog open={!!viewItems} onOpenChange={() => { setViewItems(null); setViewSession(null); }}>
+      <Dialog open={!!viewItems} onOpenChange={() => {setViewItems(null);setViewSession(null);}}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{viewSession?.name} — Items</DialogTitle></DialogHeader>
           <div className="rounded-lg border overflow-hidden">
@@ -626,19 +626,19 @@ export default function EnterInventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {viewItems?.map(item => (
-                  <TableRow key={item.id}>
+                {viewItems?.map((item) =>
+                <TableRow key={item.id}>
                     <TableCell className="text-sm">{item.item_name}</TableCell>
                     <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge></TableCell>
                     <TableCell className="font-mono text-sm">{item.current_stock}</TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">{item.par_level}</TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
+    </div>);
+
 }
