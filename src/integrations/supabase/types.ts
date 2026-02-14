@@ -591,6 +591,129 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          channel_email: boolean
+          channel_in_app: boolean
+          created_at: string
+          digest_hour: number
+          email_digest_mode: Database["public"]["Enums"]["email_digest_mode"]
+          id: string
+          location_id: string | null
+          low_stock_red: boolean
+          low_stock_yellow: boolean
+          restaurant_id: string
+          timezone: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          channel_email?: boolean
+          channel_in_app?: boolean
+          created_at?: string
+          digest_hour?: number
+          email_digest_mode?: Database["public"]["Enums"]["email_digest_mode"]
+          id?: string
+          location_id?: string | null
+          low_stock_red?: boolean
+          low_stock_yellow?: boolean
+          restaurant_id: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          channel_email?: boolean
+          channel_in_app?: boolean
+          created_at?: string
+          digest_hour?: number
+          email_digest_mode?: Database["public"]["Enums"]["email_digest_mode"]
+          id?: string
+          location_id?: string | null
+          low_stock_red?: boolean
+          low_stock_yellow?: boolean
+          restaurant_id?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          data: Json | null
+          emailed_at: string | null
+          id: string
+          location_id: string | null
+          message: string
+          read_at: string | null
+          restaurant_id: string
+          severity: Database["public"]["Enums"]["notification_severity"]
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json | null
+          emailed_at?: string | null
+          id?: string
+          location_id?: string | null
+          message: string
+          read_at?: string | null
+          restaurant_id: string
+          severity?: Database["public"]["Enums"]["notification_severity"]
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json | null
+          emailed_at?: string | null
+          id?: string
+          location_id?: string | null
+          message?: string
+          read_at?: string | null
+          restaurant_id?: string
+          severity?: Database["public"]["Enums"]["notification_severity"]
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           catalog_item_id: string | null
@@ -638,6 +761,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          location_id: string | null
           restaurant_id: string
           status: Database["public"]["Enums"]["order_status"]
           updated_at: string
@@ -646,6 +770,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          location_id?: string | null
           restaurant_id: string
           status?: Database["public"]["Enums"]["order_status"]
           updated_at?: string
@@ -654,11 +779,19 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          location_id?: string | null
           restaurant_id?: string
           status?: Database["public"]["Enums"]["order_status"]
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "orders_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -709,6 +842,7 @@ export type Database = {
           created_by: string | null
           id: string
           inventory_list_id: string | null
+          location_id: string | null
           name: string
           restaurant_id: string
           updated_at: string
@@ -718,6 +852,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           inventory_list_id?: string | null
+          location_id?: string | null
           name: string
           restaurant_id: string
           updated_at?: string
@@ -727,6 +862,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           inventory_list_id?: string | null
+          location_id?: string | null
           name?: string
           restaurant_id?: string
           updated_at?: string
@@ -737,6 +873,13 @@ export type Database = {
             columns: ["inventory_list_id"]
             isOneToOne: false
             referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "par_guides_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
           {
@@ -813,6 +956,7 @@ export type Database = {
           created_by: string | null
           id: string
           inventory_list_id: string | null
+          location_id: string | null
           restaurant_id: string
           smart_order_run_id: string | null
           vendor_name: string | null
@@ -822,6 +966,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           inventory_list_id?: string | null
+          location_id?: string | null
           restaurant_id: string
           smart_order_run_id?: string | null
           vendor_name?: string | null
@@ -831,6 +976,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           inventory_list_id?: string | null
+          location_id?: string | null
           restaurant_id?: string
           smart_order_run_id?: string | null
           vendor_name?: string | null
@@ -841,6 +987,13 @@ export type Database = {
             columns: ["inventory_list_id"]
             isOneToOne: false
             referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_history_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
           {
@@ -890,6 +1043,89 @@ export type Database = {
             columns: ["purchase_history_id"]
             isOneToOne: false
             referencedRelation: "purchase_history"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reminder_targets: {
+        Row: {
+          id: string
+          reminder_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          reminder_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          reminder_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_targets_reminder_id_fkey"
+            columns: ["reminder_id"]
+            isOneToOne: false
+            referencedRelation: "reminders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reminders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          days_of_week: Json
+          id: string
+          is_enabled: boolean
+          location_id: string | null
+          name: string
+          restaurant_id: string
+          time_of_day: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          days_of_week?: Json
+          id?: string
+          is_enabled?: boolean
+          location_id?: string | null
+          name: string
+          restaurant_id: string
+          time_of_day?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          days_of_week?: Json
+          id?: string
+          is_enabled?: boolean
+          location_id?: string | null
+          name?: string
+          restaurant_id?: string
+          time_of_day?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminders_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminders_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
             referencedColumns: ["id"]
           },
         ]
@@ -1194,6 +1430,45 @@ export type Database = {
           },
         ]
       }
+      user_ui_state: {
+        Row: {
+          id: string
+          selected_location_id: string | null
+          selected_restaurant_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          selected_location_id?: string | null
+          selected_restaurant_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          selected_location_id?: string | null
+          selected_restaurant_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_ui_state_selected_location_id_fkey"
+            columns: ["selected_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_ui_state_selected_restaurant_id_fkey"
+            columns: ["selected_restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1236,6 +1511,7 @@ export type Database = {
         Args: { ph_id: string }
         Returns: string
       }
+      reminder_restaurant_id: { Args: { r_id: string }; Returns: string }
       session_restaurant_id: { Args: { s_id: string }; Returns: string }
       smart_order_run_restaurant_id: {
         Args: { sr_id: string }
@@ -1244,6 +1520,8 @@ export type Database = {
     }
     Enums: {
       app_role: "OWNER" | "MANAGER" | "STAFF"
+      email_digest_mode: "IMMEDIATE" | "DAILY_DIGEST"
+      notification_severity: "INFO" | "WARNING" | "CRITICAL"
       order_status: "PENDING" | "PREP" | "READY" | "COMPLETED" | "CANCELED"
       session_status: "IN_PROGRESS" | "IN_REVIEW" | "APPROVED"
     }
@@ -1374,6 +1652,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["OWNER", "MANAGER", "STAFF"],
+      email_digest_mode: ["IMMEDIATE", "DAILY_DIGEST"],
+      notification_severity: ["INFO", "WARNING", "CRITICAL"],
       order_status: ["PENDING", "PREP", "READY", "COMPLETED", "CANCELED"],
       session_status: ["IN_PROGRESS", "IN_REVIEW", "APPROVED"],
     },
