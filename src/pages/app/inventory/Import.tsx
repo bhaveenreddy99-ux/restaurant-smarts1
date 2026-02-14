@@ -10,10 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Upload, FileSpreadsheet, ArrowRight, Save, CheckCircle, AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, Sparkles, Shield } from "lucide-react";
+import { Upload, FileSpreadsheet, ArrowRight, CheckCircle, AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, Sparkles, Shield, Ban } from "lucide-react";
 import {
   VENDOR_PRESETS,
   CANONICAL_FIELDS,
@@ -23,6 +22,7 @@ import {
   overallConfidence,
   createHeaderFingerprint,
   validateNumericField,
+  isIgnoredColumn,
   type CanonicalField,
   type VendorPreset,
   type FieldMapping,
@@ -70,11 +70,7 @@ export default function ImportPage() {
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
   const [mapping, setMapping] = useState<Record<CanonicalField, string | null>>({} as any);
   const [showMappingEditor, setShowMappingEditor] = useState(false);
-
-  // Import destination
-  const [destination, setDestination] = useState<"catalog" | "session">("catalog");
-  const [sessionName, setSessionName] = useState("");
-  const [submitToReview, setSubmitToReview] = useState(false);
+  const [ignoredColumns, setIgnoredColumns] = useState<string[]>([]);
 
   // Templates
   const [templates, setTemplates] = useState<any[]>([]);
@@ -100,25 +96,18 @@ export default function ImportPage() {
 
   const findBestTemplate = (headers: string[], detectedVendor: VendorPreset): any | null => {
     const fingerprint = createHeaderFingerprint(headers);
-
-    // 1. Exact fingerprint match
     const exactMatch = templates.find(t =>
       t.header_fingerprint === fingerprint &&
       (t.inventory_list_id === listId || !t.inventory_list_id)
     );
     if (exactMatch) return exactMatch;
-
-    // 2. Same vendor + list match
     const vendorListMatch = templates.find(t =>
       t.vendor_name === detectedVendor.id &&
       t.inventory_list_id === listId
     );
     if (vendorListMatch) return vendorListMatch;
-
-    // 3. Same vendor match
     const vendorMatch = templates.find(t => t.vendor_name === detectedVendor.id);
     if (vendorMatch) return vendorMatch;
-
     return null;
   };
 
@@ -132,14 +121,16 @@ export default function ImportPage() {
       setHeaders(h);
       setRows(r);
 
+      // Detect ignored columns
+      const ignored = h.filter(col => isIgnoredColumn(col));
+      setIgnoredColumns(ignored);
+
       const detected = detectVendor(h);
       setVendor(detected);
 
-      // Find best matching template
       const bestTemplate = findBestTemplate(h, detected);
       setMatchedTemplate(bestTemplate);
 
-      // Auto-map with confidence, using saved template as bias
       const savedMapping = bestTemplate?.mapping_json as Record<CanonicalField, string | null> | null;
       const mappings = autoMapColumnsWithConfidence(h, detected, r, savedMapping);
       setFieldMappings(mappings);
@@ -152,7 +143,10 @@ export default function ImportPage() {
         toast.success(`Detected vendor: ${detected.label} (${totalConf}% confidence)`);
       }
 
-      // If high confidence and item_name is mapped, skip to preview
+      if (ignored.length > 0) {
+        toast.info(`${ignored.length} column(s) ignored (stock/PAR/order data)`);
+      }
+
       if (totalConf >= CONFIDENCE_THRESHOLD && hasItemName) {
         setShowMappingEditor(false);
         setStep("mapping");
@@ -181,9 +175,8 @@ export default function ImportPage() {
 
   const handleProceedToPreview = () => {
     if (!mapping.item_name) { toast.error("item_name mapping is required"); return; }
-    if (destination === "session" && !sessionName.trim()) { toast.error("Session name is required"); return; }
     const w: string[] = [];
-    const numericFields: CanonicalField[] = ["currentStock", "parLevel", "leadTimeDays", "unitCost"];
+    const numericFields: CanonicalField[] = ["unitCost"];
     for (const field of numericFields) {
       const col = mapping[field];
       if (!col) continue;
@@ -214,6 +207,8 @@ export default function ImportPage() {
     let count = 0;
     for (const col of extraCols) {
       if (count >= 20) break;
+      // Don't store ignored columns in metadata either
+      if (isIgnoredColumn(col)) continue;
       if (row[col] !== "" && row[col] != null) {
         metadata[col.substring(0, 100)] = String(row[col]).substring(0, 500);
         count++;
@@ -227,12 +222,21 @@ export default function ImportPage() {
     setImporting(true);
     let createdCount = 0;
     let updatedCount = 0;
-    let skippedCount = 0;
+    const skippedCount = 0;
     try {
-      const extraCols = headers.filter(h => !Object.values(mapping).includes(h));
+      const mappedCols = Object.values(mapping).filter(Boolean) as string[];
+      const extraCols = headers.filter(h => !mappedCols.includes(h));
 
-      if (destination === "catalog") {
-        const catalogItems = rows.map(row => ({
+      // Catalog-only import
+      const catalogItems = rows.map(row => {
+        const brandVal = truncate(getMappedValue(row, "brand"), 200);
+        const baseMetadata = sanitizeMetadata(row, extraCols);
+        // Store brand in metadata if present
+        const metadata = brandVal
+          ? { ...(baseMetadata || {}), brand: brandVal }
+          : baseMetadata;
+
+        return {
           restaurant_id: currentRestaurant.id,
           inventory_list_id: listId,
           item_name: truncate(getMappedValue(row, "item_name"), 200) || "",
@@ -240,82 +244,51 @@ export default function ImportPage() {
           category: truncate(getMappedValue(row, "category"), 100),
           unit: truncate(getMappedValue(row, "unit"), 50),
           pack_size: truncate(getMappedValue(row, "pack_size"), 100),
-          default_par_level: validateNumericField(getMappedValue(row, "parLevel")).parsed,
           default_unit_cost: validateNumericField(getMappedValue(row, "unitCost")).parsed,
           vendor_name: truncate(getMappedValue(row, "vendor_name"), 200) || (vendor.defaultVendorName ? vendor.defaultVendorName.substring(0, 200) : null),
-          metadata: sanitizeMetadata(row, extraCols),
-        })).filter(i => i.item_name);
+          metadata,
+        };
+      }).filter(i => i.item_name);
 
-        const { data: existingItems } = await supabase
-          .from("inventory_catalog_items")
-          .select("id, item_name, vendor_sku")
-          .eq("inventory_list_id", listId);
+      // Upsert logic: match by vendor_sku first, then normalized item_name
+      const { data: existingItems } = await supabase
+        .from("inventory_catalog_items")
+        .select("id, item_name, vendor_sku")
+        .eq("inventory_list_id", listId);
 
-        const existingBySkuMap = new Map<string, string>();
-        const existingByNameMap = new Map<string, string>();
-        (existingItems || []).forEach(e => {
-          if (e.vendor_sku) existingBySkuMap.set(e.vendor_sku.toLowerCase(), e.id);
-          existingByNameMap.set(e.item_name.toLowerCase().trim(), e.id);
-        });
+      const existingBySkuMap = new Map<string, string>();
+      const existingByNameMap = new Map<string, string>();
+      (existingItems || []).forEach(e => {
+        if (e.vendor_sku) existingBySkuMap.set(e.vendor_sku.toLowerCase(), e.id);
+        existingByNameMap.set(e.item_name.toLowerCase().trim(), e.id);
+      });
 
-        const toInsert: typeof catalogItems = [];
-        const toUpdate: { id: string; data: any }[] = [];
+      const toInsert: typeof catalogItems = [];
+      const toUpdate: { id: string; data: any }[] = [];
 
-        for (const item of catalogItems) {
-          const matchId = (item.vendor_sku && existingBySkuMap.get(item.vendor_sku.toLowerCase())) ||
-            existingByNameMap.get(item.item_name.toLowerCase().trim());
-          if (matchId) {
-            toUpdate.push({ id: matchId, data: item });
-          } else {
-            toInsert.push(item);
-          }
+      for (const item of catalogItems) {
+        const matchId = (item.vendor_sku && existingBySkuMap.get(item.vendor_sku.toLowerCase())) ||
+          existingByNameMap.get(item.item_name.toLowerCase().trim());
+        if (matchId) {
+          toUpdate.push({ id: matchId, data: item });
+        } else {
+          toInsert.push(item);
         }
-
-        for (let i = 0; i < toInsert.length; i += 500) {
-          const chunk = toInsert.slice(i, i + 500);
-          const { error } = await supabase.from("inventory_catalog_items").insert(chunk);
-          if (error) { toast.error(error.message); setImporting(false); return; }
-        }
-
-        for (const u of toUpdate) {
-          const { restaurant_id, inventory_list_id, ...updateData } = u.data;
-          await supabase.from("inventory_catalog_items").update(updateData).eq("id", u.id);
-        }
-
-        createdCount = toInsert.length;
-        updatedCount = toUpdate.length;
-      } else {
-        const { data: session, error: sessErr } = await supabase.from("inventory_sessions").insert({
-          restaurant_id: currentRestaurant.id,
-          inventory_list_id: listId,
-          name: sessionName || `Import ${new Date().toLocaleDateString()}`,
-          created_by: user.id,
-          status: submitToReview ? "IN_REVIEW" : "IN_PROGRESS",
-        }).select().single();
-        if (sessErr || !session) { toast.error(sessErr?.message || "Failed"); setImporting(false); return; }
-
-        const sessionItems = rows.map(row => ({
-          session_id: session.id,
-          item_name: truncate(getMappedValue(row, "item_name"), 200) || "",
-          vendor_sku: truncate(getMappedValue(row, "vendor_sku"), 100),
-          category: truncate(getMappedValue(row, "category"), 100),
-          unit: truncate(getMappedValue(row, "unit"), 50),
-          pack_size: truncate(getMappedValue(row, "pack_size"), 100),
-          current_stock: validateNumericField(getMappedValue(row, "currentStock")).parsed || 0,
-          par_level: validateNumericField(getMappedValue(row, "parLevel")).parsed || 0,
-          lead_time_days: validateNumericField(getMappedValue(row, "leadTimeDays")).parsed,
-          unit_cost: validateNumericField(getMappedValue(row, "unitCost")).parsed,
-          vendor_name: truncate(getMappedValue(row, "vendor_name"), 200) || (vendor.defaultVendorName ? vendor.defaultVendorName.substring(0, 200) : null),
-          metadata: sanitizeMetadata(row, extraCols),
-        })).filter(i => i.item_name);
-
-        for (let i = 0; i < sessionItems.length; i += 500) {
-          const chunk = sessionItems.slice(i, i + 500);
-          const { error } = await supabase.from("inventory_session_items").insert(chunk);
-          if (error) { toast.error(error.message); setImporting(false); return; }
-        }
-        createdCount = sessionItems.length;
       }
+
+      for (let i = 0; i < toInsert.length; i += 500) {
+        const chunk = toInsert.slice(i, i + 500);
+        const { error } = await supabase.from("inventory_catalog_items").insert(chunk);
+        if (error) { toast.error(error.message); setImporting(false); return; }
+      }
+
+      for (const u of toUpdate) {
+        const { restaurant_id, inventory_list_id, ...updateData } = u.data;
+        await supabase.from("inventory_catalog_items").update(updateData).eq("id", u.id);
+      }
+
+      createdCount = toInsert.length;
+      updatedCount = toUpdate.length;
 
       // Save import run record
       const confScore = overallConfidence(fieldMappings);
@@ -334,7 +307,7 @@ export default function ImportPage() {
         template_id: matchedTemplate?.id || null,
       });
 
-      // Also save to legacy import_files for backward compat
+      // Legacy import files record
       await supabase.from("inventory_import_files").insert({
         restaurant_id: currentRestaurant.id,
         inventory_list_id: listId,
@@ -347,11 +320,10 @@ export default function ImportPage() {
         mapping_json: mapping,
       });
 
-      // Save/update template if remember is on
+      // Save/update template
       if (rememberMapping) {
         const fingerprint = createHeaderFingerprint(headers);
         if (matchedTemplate) {
-          // Update existing template
           await supabase.from("import_templates").update({
             mapping_json: mapping,
             header_fingerprint: fingerprint,
@@ -359,7 +331,6 @@ export default function ImportPage() {
             updated_at: new Date().toISOString(),
           }).eq("id", matchedTemplate.id);
         } else {
-          // Create new template
           await supabase.from("import_templates").insert({
             restaurant_id: currentRestaurant.id,
             name: `${vendor.label} — ${listName || "Import"}`,
@@ -374,7 +345,7 @@ export default function ImportPage() {
       }
 
       setImportResult({ created: createdCount, updated: updatedCount, skipped: skippedCount });
-      toast.success(`Imported ${createdCount} new, updated ${updatedCount} items`);
+      toast.success(`Imported ${createdCount} new, updated ${updatedCount} catalog items`);
       setStep("done");
     } catch (err: any) { toast.error(err.message || "Import failed"); }
     setImporting(false);
@@ -383,6 +354,8 @@ export default function ImportPage() {
   const previewRows = rows.slice(0, 10);
   const totalConf = overallConfidence(fieldMappings);
   const mappedCount = fieldMappings.filter(m => m.column).length;
+  // Only show eligible (non-ignored) headers in the mapping dropdowns
+  const eligibleHeaders = headers.filter(h => !isIgnoredColumn(h));
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -392,7 +365,7 @@ export default function ImportPage() {
         </Button>
         <div>
           <h1 className="page-title">Import to {listName || "Inventory List"}</h1>
-          <p className="page-description">Upload CSV or Excel files from any vendor</p>
+          <p className="page-description">Import catalog items from CSV or Excel — Sysco, US Foods, PFG, R365 supported</p>
         </div>
       </div>
 
@@ -424,8 +397,9 @@ export default function ImportPage() {
               <Label className="text-sm">Select CSV or Excel file</Label>
               <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} className="h-10" />
             </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> Auto-detects Sysco, US Foods, PFG, R365</div>
+            <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> Auto-detects Sysco, US Foods, PFG, Restaurant365</div>
+              <div className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5 text-primary" /> Imports catalog data only — stock counts, PAR levels, and order quantities are ignored</div>
               <div className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5 text-primary" /> Remembers mappings for future imports</div>
             </div>
           </CardContent>
@@ -461,6 +435,27 @@ export default function ImportPage() {
             </CardContent>
           </Card>
 
+          {/* Ignored columns notice */}
+          {ignoredColumns.length > 0 && (
+            <Card className="border-muted">
+              <CardContent className="p-3">
+                <div className="flex items-start gap-2">
+                  <Ban className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {ignoredColumns.length} column(s) ignored (stock/PAR/order data not imported to catalog)
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {ignoredColumns.map(col => (
+                        <Badge key={col} variant="secondary" className="text-[10px] font-mono line-through opacity-60">{col}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Mapping summary chips */}
           <div className="flex flex-wrap gap-2">
             {fieldMappings.filter(m => m.column).map(m => (
@@ -474,41 +469,17 @@ export default function ImportPage() {
             ))}
           </div>
 
-          {/* Destination + session options */}
+          {/* Vendor selector */}
           <Card>
-            <CardContent className="p-4 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold text-muted-foreground">Import Destination</Label>
-                  <Select value={destination} onValueChange={v => setDestination(v as any)}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="catalog">Inventory Catalog (master list)</SelectItem>
-                      <SelectItem value="session">Inventory Session</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold text-muted-foreground">Vendor</Label>
-                  <Select value={vendor.id} onValueChange={handleVendorChange}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>{VENDOR_PRESETS.map(v => <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
+            <CardContent className="p-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground">Vendor</Label>
+                <Select value={vendor.id} onValueChange={handleVendorChange}>
+                  <SelectTrigger className="h-10 w-64"><SelectValue /></SelectTrigger>
+                  <SelectContent>{VENDOR_PRESETS.map(v => <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>)}</SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Importing to: <span className="font-semibold text-foreground">Inventory Catalog</span> (master item list)</p>
               </div>
-
-              {destination === "session" && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-sm">Session Name</Label>
-                    <Input value={sessionName} onChange={e => setSessionName(e.target.value)} placeholder="e.g. Sysco Weekly Import" className="h-10" />
-                  </div>
-                  <div className="flex items-center gap-2 pt-6">
-                    <Checkbox checked={submitToReview} onCheckedChange={v => setSubmitToReview(!!v)} id="submit-review" />
-                    <Label htmlFor="submit-review" className="text-sm">Submit to Review after import</Label>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -540,7 +511,7 @@ export default function ImportPage() {
                             <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__none__">— Not mapped —</SelectItem>
-                              {headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                              {eligibleHeaders.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                             </SelectContent>
                           </Select>
                           {fm && fm.column && confidenceBadge(fm.confidence)}
@@ -560,7 +531,7 @@ export default function ImportPage() {
               <Label htmlFor="remember" className="text-sm text-muted-foreground">Remember mapping for future imports</Label>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => { setStep("upload"); setFile(null); setHeaders([]); setRows([]); }}>Back</Button>
+              <Button variant="outline" onClick={() => { setStep("upload"); setFile(null); setHeaders([]); setRows([]); setIgnoredColumns([]); }}>Back</Button>
               <Button onClick={handleProceedToPreview} className="bg-gradient-amber shadow-amber gap-2">
                 <ArrowRight className="h-4 w-4" /> Preview & Import
               </Button>
@@ -585,7 +556,7 @@ export default function ImportPage() {
           <Card>
             <div className="p-4 pb-2 flex items-center justify-between">
               <p className="text-sm font-semibold">
-                Preview ({rows.length} rows) → {destination === "catalog" ? "Catalog" : "Session"} for {listName}
+                Preview ({rows.length} rows) → Catalog for {listName}
               </p>
               <Badge variant="secondary" className="text-xs">{vendor.label}</Badge>
             </div>
@@ -618,7 +589,7 @@ export default function ImportPage() {
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setStep("mapping")}>Back</Button>
             <Button onClick={handleImport} className="bg-gradient-amber shadow-amber gap-2" disabled={importing}>
-              {importing ? "Importing..." : `Import ${rows.length} Items`}
+              {importing ? "Importing..." : `Import ${rows.length} Catalog Items`}
             </Button>
           </div>
         </div>
@@ -636,6 +607,9 @@ export default function ImportPage() {
                 {importResult.skipped > 0 && <Badge variant="secondary">{importResult.skipped} skipped</Badge>}
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              Catalog items are now available across Inventory Lists, PAR Management, Smart Orders, and Purchase History.
+            </p>
             {rememberMapping && (
               <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
                 <Shield className="h-3.5 w-3.5" /> Mapping saved — next import will auto-map
@@ -643,7 +617,7 @@ export default function ImportPage() {
             )}
             <div className="flex gap-2 justify-center pt-2">
               <Button onClick={() => navigate("/app/inventory/lists")} variant="outline">Back to Lists</Button>
-              <Button onClick={() => { setStep("upload"); setFile(null); setHeaders([]); setRows([]); setWarnings([]); setImportResult(null); }} variant="outline">
+              <Button onClick={() => { setStep("upload"); setFile(null); setHeaders([]); setRows([]); setWarnings([]); setImportResult(null); setIgnoredColumns([]); }} variant="outline">
                 Import Another File
               </Button>
             </div>
