@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger,
@@ -29,9 +30,20 @@ import {
 import { toast } from "sonner";
 import {
   Plus, Upload, ClipboardList, MoreVertical, Pencil, Trash2,
-  Download, Search, ArrowLeft, AlertTriangle, ShoppingCart, Layers, FileSpreadsheet, ChevronRight,
+  Download, Search, ArrowLeft, AlertTriangle, ShoppingCart, FileSpreadsheet, ChevronRight, X,
 } from "lucide-react";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/export-utils";
+
+interface ActionItem {
+  id: string;
+  item_name: string;
+  category: string | null;
+  unit: string | null;
+  default_unit_cost: number | null;
+  inventory_list_id: string | null;
+  listName?: string;
+  reasons: string[];
+}
 
 export default function InventoryListsPage() {
   const { currentRestaurant } = useRestaurant();
@@ -44,6 +56,8 @@ export default function InventoryListsPage() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionNeededCount, setActionNeededCount] = useState(0);
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [actionDrawerOpen, setActionDrawerOpen] = useState(false);
 
   // List detail state
   const [selectedList, setSelectedList] = useState<any>(null);
@@ -71,6 +85,9 @@ export default function InventoryListsPage() {
       .order("created_at", { ascending: false });
     if (data) {
       setLists(data);
+      const listMap: Record<string, string> = {};
+      data.forEach(l => { listMap[l.id] = l.name; });
+
       const { data: catalogAll } = await supabase
         .from("inventory_catalog_items")
         .select("id, inventory_list_id, category, unit, default_unit_cost, item_name")
@@ -81,10 +98,30 @@ export default function InventoryListsPage() {
           if (i.inventory_list_id) counts[i.inventory_list_id] = (counts[i.inventory_list_id] || 0) + 1;
         });
         setItemCounts(counts);
-        // Action needed: missing category, unit, unit_cost, or duplicate name
+
+        // Action needed: compute per-item reasons
         const nameMap: Record<string, number> = {};
-        catalogAll.forEach(i => { nameMap[i.item_name] = (nameMap[i.item_name] || 0) + 1; });
-        const issues = catalogAll.filter(i => !i.category || !i.unit || i.default_unit_cost == null || nameMap[i.item_name] > 1);
+        catalogAll.forEach(i => {
+          const norm = i.item_name.trim().toLowerCase();
+          nameMap[norm] = (nameMap[norm] || 0) + 1;
+        });
+        const issues: ActionItem[] = [];
+        catalogAll.forEach(i => {
+          const reasons: string[] = [];
+          if (!i.category) reasons.push("Missing Category");
+          if (!i.unit) reasons.push("Missing Unit");
+          if (i.default_unit_cost == null) reasons.push("Missing Unit Cost");
+          const norm = i.item_name.trim().toLowerCase();
+          if (nameMap[norm] > 1) reasons.push("Possible Duplicate");
+          if (reasons.length > 0) {
+            issues.push({
+              ...i,
+              listName: i.inventory_list_id ? listMap[i.inventory_list_id] : undefined,
+              reasons,
+            });
+          }
+        });
+        setActionItems(issues);
         setActionNeededCount(issues.length);
       }
       const { data: imports } = await supabase
@@ -126,28 +163,22 @@ export default function InventoryListsPage() {
 
   const handleDelete = async () => {
     if (!deleteListId) return;
-    // Cascade-delete all related records before deleting the list
-    const cascadeTables = [
-      "inventory_catalog_items",
-      "inventory_import_files",
-      "import_runs",
-      "import_templates",
-    ] as const;
+    // Full cascade delete: all related records then the list itself
+    // 1) Catalog items, import files, import runs, import templates
+    const cascadeTables = ["inventory_catalog_items", "inventory_import_files", "import_runs", "import_templates"] as const;
     for (const table of cascadeTables) {
       const { error } = await supabase.from(table).delete().eq("inventory_list_id", deleteListId);
       if (error) { toast.error(`Failed to clean up ${table}: ${error.message}`); return; }
     }
-    // Delete sessions and their items
+    // 2) Sessions and their items + smart order runs/items + purchase history
     const { data: sessions } = await supabase.from("inventory_sessions").select("id").eq("inventory_list_id", deleteListId);
     if (sessions && sessions.length > 0) {
       const sessionIds = sessions.map(s => s.id);
       await supabase.from("inventory_session_items").delete().in("session_id", sessionIds);
-      // Delete smart order runs and their items linked to these sessions
       const { data: runs } = await supabase.from("smart_order_runs").select("id").in("session_id", sessionIds);
       if (runs && runs.length > 0) {
         const runIds = runs.map(r => r.id);
         await supabase.from("smart_order_run_items").delete().in("run_id", runIds);
-        // Delete purchase history linked to these runs
         const { data: purchases } = await supabase.from("purchase_history").select("id").in("smart_order_run_id", runIds);
         if (purchases && purchases.length > 0) {
           await supabase.from("purchase_history_items").delete().in("purchase_history_id", purchases.map(p => p.id));
@@ -157,16 +188,34 @@ export default function InventoryListsPage() {
       }
       await supabase.from("inventory_sessions").delete().eq("inventory_list_id", deleteListId);
     }
-    // Delete PAR guides and their items
+    // Also delete smart order runs linked by inventory_list_id (not via session)
+    const { data: listRuns } = await supabase.from("smart_order_runs").select("id").eq("inventory_list_id", deleteListId);
+    if (listRuns && listRuns.length > 0) {
+      const runIds = listRuns.map(r => r.id);
+      await supabase.from("smart_order_run_items").delete().in("run_id", runIds);
+      const { data: purchases } = await supabase.from("purchase_history").select("id").in("smart_order_run_id", runIds);
+      if (purchases && purchases.length > 0) {
+        await supabase.from("purchase_history_items").delete().in("purchase_history_id", purchases.map(p => p.id));
+        await supabase.from("purchase_history").delete().in("id", purchases.map(p => p.id));
+      }
+      await supabase.from("smart_order_runs").delete().in("id", runIds);
+    }
+    // Also delete purchase history linked by inventory_list_id
+    const { data: listPurchases } = await supabase.from("purchase_history").select("id").eq("inventory_list_id", deleteListId);
+    if (listPurchases && listPurchases.length > 0) {
+      await supabase.from("purchase_history_items").delete().in("purchase_history_id", listPurchases.map(p => p.id));
+      await supabase.from("purchase_history").delete().in("id", listPurchases.map(p => p.id));
+    }
+    // 3) PAR guides and their items
     const { data: parGuides } = await supabase.from("par_guides").select("id").eq("inventory_list_id", deleteListId);
     if (parGuides && parGuides.length > 0) {
       await supabase.from("par_guide_items").delete().in("par_guide_id", parGuides.map(g => g.id));
       await supabase.from("par_guides").delete().eq("inventory_list_id", deleteListId);
     }
-    // Finally delete the list
+    // 4) Finally delete the list itself
     const { error } = await supabase.from("inventory_lists").delete().eq("id", deleteListId);
     if (error) toast.error(error.message);
-    else { toast.success("List deleted"); setDeleteListId(null); if (selectedList?.id === deleteListId) setSelectedList(null); fetchLists(); }
+    else { toast.success("List and all related data deleted"); setDeleteListId(null); if (selectedList?.id === deleteListId) setSelectedList(null); fetchLists(); }
   };
 
   // List detail
@@ -185,7 +234,7 @@ export default function InventoryListsPage() {
   const handleSaveEdit = async (itemId: string) => {
     const { error } = await supabase.from("inventory_catalog_items").update(editValues).eq("id", itemId);
     if (error) toast.error(error.message);
-    else { setEditingItem(null); openListDetail(selectedList); }
+    else { setEditingItem(null); openListDetail(selectedList); fetchLists(); }
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -224,6 +273,23 @@ export default function InventoryListsPage() {
     else exportToPDF(data, fn, "inventory", meta);
   };
 
+  // Action needed: edit inline from action drawer
+  const handleEditActionItem = (item: ActionItem) => {
+    setActionDrawerOpen(false);
+    const list = lists.find(l => l.id === item.inventory_list_id);
+    if (list) {
+      openListDetail(list).then(() => {
+        setEditingItem(item.id);
+        setEditValues({
+          item_name: item.item_name,
+          category: item.category,
+          unit: item.unit,
+          default_unit_cost: item.default_unit_cost,
+        });
+      });
+    }
+  };
+
   const filteredCatalog = catalogItems.filter(i => {
     if (detailCategory !== "all" && i.category !== detailCategory) return false;
     if (detailSearch && !i.item_name.toLowerCase().includes(detailSearch.toLowerCase())) return false;
@@ -231,6 +297,12 @@ export default function InventoryListsPage() {
   });
   const categories = [...new Set(catalogItems.map(i => i.category).filter(Boolean))];
   const listImportFiles = selectedList ? (importFiles[selectedList.id] || []) : [];
+
+  // Action items by reason
+  const actionByCategory = actionItems.filter(i => i.reasons.includes("Missing Category"));
+  const actionByUnit = actionItems.filter(i => i.reasons.includes("Missing Unit"));
+  const actionByCost = actionItems.filter(i => i.reasons.includes("Missing Unit Cost"));
+  const actionByDuplicate = actionItems.filter(i => i.reasons.includes("Possible Duplicate"));
 
   if (loading) {
     return (
@@ -244,11 +316,75 @@ export default function InventoryListsPage() {
     );
   }
 
+  // ─── ACTION NEEDED DRAWER ─────────────────────────
+  const renderActionDrawer = () => (
+    <Dialog open={actionDrawerOpen} onOpenChange={setActionDrawerOpen}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            Action Needed — {actionNeededCount} items
+          </DialogTitle>
+        </DialogHeader>
+        <Tabs defaultValue="category" className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="w-full justify-start">
+            <TabsTrigger value="category" className="text-xs">Missing Category ({actionByCategory.length})</TabsTrigger>
+            <TabsTrigger value="unit" className="text-xs">Missing Unit ({actionByUnit.length})</TabsTrigger>
+            <TabsTrigger value="cost" className="text-xs">Missing Cost ({actionByCost.length})</TabsTrigger>
+            <TabsTrigger value="duplicate" className="text-xs">Duplicates ({actionByDuplicate.length})</TabsTrigger>
+          </TabsList>
+          {[
+            { key: "category", items: actionByCategory },
+            { key: "unit", items: actionByUnit },
+            { key: "cost", items: actionByCost },
+            { key: "duplicate", items: actionByDuplicate },
+          ].map(({ key, items: tabItems }) => (
+            <TabsContent key={key} value={key} className="flex-1 overflow-auto">
+              {tabItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No items in this category.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead className="text-xs font-semibold">Item Name</TableHead>
+                      <TableHead className="text-xs font-semibold">List</TableHead>
+                      <TableHead className="text-xs font-semibold">Issues</TableHead>
+                      <TableHead className="text-xs font-semibold w-20">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tabItems.map(item => (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-sm font-medium">{item.item_name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{item.listName || "—"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {item.reasons.map(r => (
+                              <Badge key={r} variant="secondary" className="text-[10px]">{r}</Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => handleEditActionItem(item)}>
+                            <Pencil className="h-3 w-3 mr-1" /> Fix
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </TabsContent>
+          ))}
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+
   // ─── LIST DETAIL VIEW ─────────────────────────
   if (selectedList) {
     return (
       <div className="space-y-6 animate-fade-in">
-        {/* Breadcrumb */}
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem><BreadcrumbLink href="/app/dashboard">Home</BreadcrumbLink></BreadcrumbItem>
@@ -261,7 +397,6 @@ export default function InventoryListsPage() {
           </BreadcrumbList>
         </Breadcrumb>
 
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedList(null)}>
@@ -289,7 +424,6 @@ export default function InventoryListsPage() {
           </div>
         </div>
 
-        {/* Filters */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -304,7 +438,6 @@ export default function InventoryListsPage() {
           </Select>
         </div>
 
-        {/* Editable Table */}
         <Card className="overflow-hidden border shadow-sm">
           <Table>
             <TableHeader>
@@ -363,7 +496,6 @@ export default function InventoryListsPage() {
           </Table>
         </Card>
 
-        {/* Add Item */}
         <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" className="gap-1.5"><Plus className="h-4 w-4" /> Add item</Button>
@@ -385,7 +517,6 @@ export default function InventoryListsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Import History */}
         {listImportFiles.length > 0 && (
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground">Import History</h3>
@@ -416,7 +547,6 @@ export default function InventoryListsPage() {
           </div>
         )}
 
-        {/* Rename Dialog */}
         <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
           <DialogContent>
             <DialogHeader><DialogTitle>Rename List</DialogTitle></DialogHeader>
@@ -427,12 +557,13 @@ export default function InventoryListsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation */}
         <AlertDialog open={!!deleteListId} onOpenChange={(o) => !o && setDeleteListId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete list?</AlertDialogTitle>
-              <AlertDialogDescription>This will permanently delete this list and all associated items. This cannot be undone.</AlertDialogDescription>
+              <AlertDialogDescription>
+                This will permanently delete the list and all related inventory sessions, PAR guides, smart orders, and purchase history. This cannot be undone.
+              </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -440,6 +571,8 @@ export default function InventoryListsPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {renderActionDrawer()}
       </div>
     );
   }
@@ -447,7 +580,6 @@ export default function InventoryListsPage() {
   // ─── MAIN LIST VIEW ───────────────────────────
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Breadcrumb */}
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem><BreadcrumbLink href="/app/dashboard">Home</BreadcrumbLink></BreadcrumbItem>
@@ -456,7 +588,6 @@ export default function InventoryListsPage() {
         </BreadcrumbList>
       </Breadcrumb>
 
-      {/* Page Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">List management</h1>
         <div className="flex gap-2">
@@ -483,9 +614,9 @@ export default function InventoryListsPage() {
         </div>
       </div>
 
-      {/* Section 1: Action Needed Banner */}
+      {/* Action Needed Banner — clickable to open drill-down */}
       {actionNeededCount > 0 && (
-        <Card className="border shadow-sm overflow-hidden">
+        <Card className="border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActionDrawerOpen(true)}>
           <div className="flex items-center">
             <div className="w-1 self-stretch bg-gradient-amber" />
             <CardContent className="flex items-center justify-between flex-1 py-3 px-4">
@@ -502,14 +633,13 @@ export default function InventoryListsPage() {
         </Card>
       )}
 
-      {/* Section 2: My Lists */}
+      {/* My Lists */}
       <div className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold">My lists</h2>
           <p className="text-sm text-muted-foreground">View and modify your lists or create new ones.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {/* Create New tile */}
           <Card className="border-dashed border-2 hover:border-primary/30 hover:bg-muted/30 transition-all cursor-pointer" onClick={() => setOpen(true)}>
             <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
               <Plus className="h-8 w-8 mb-2 opacity-40" />
@@ -517,7 +647,6 @@ export default function InventoryListsPage() {
             </CardContent>
           </Card>
 
-          {/* List tiles */}
           {lists.map(list => (
             <Card key={list.id} className="hover:shadow-md transition-all cursor-pointer border shadow-sm group" onClick={() => openListDetail(list)}>
               <CardContent className="p-4 space-y-2">
@@ -558,7 +687,7 @@ export default function InventoryListsPage() {
         </div>
       </div>
 
-      {/* Section 3: Purchase History */}
+      {/* Purchase History */}
       <div className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold">Purchase history</h2>
@@ -579,19 +708,7 @@ export default function InventoryListsPage() {
         </div>
       </div>
 
-      {/* Section 4: Managed Lists */}
-      <div className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold">Managed lists</h2>
-          <p className="text-sm text-muted-foreground">View corporate and curated lists.</p>
-        </div>
-        <Card className="border shadow-sm">
-          <CardContent className="py-8 text-center text-muted-foreground">
-            <Layers className="mx-auto h-8 w-8 mb-2 opacity-20" />
-            <p className="text-sm">No managed lists available.</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Managed Lists section REMOVED */}
 
       {/* Rename Dialog */}
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
@@ -609,7 +726,9 @@ export default function InventoryListsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete list?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete this list and all associated items. This cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>
+              This will permanently delete the list and all related inventory sessions, PAR guides, smart orders, and purchase history. This cannot be undone.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -617,6 +736,8 @@ export default function InventoryListsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {renderActionDrawer()}
     </div>
   );
 }
