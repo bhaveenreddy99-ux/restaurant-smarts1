@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,6 +16,11 @@ import { toast } from "sonner";
 import { Plus, Trash2, Clock, Pencil } from "lucide-react";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+const RECIPIENTS_LABELS: Record<string, string> = {
+  OWNERS_MANAGERS: "Owners & Managers",
+  ALL: "All Members",
+  CUSTOM: "Custom",
+};
 
 export default function ReminderSettingsPage() {
   const { currentRestaurant } = useRestaurant();
@@ -29,6 +35,7 @@ export default function ReminderSettingsPage() {
     time_of_day: "21:00",
     timezone: "America/New_York",
     is_enabled: true,
+    recipients_mode: "OWNERS_MANAGERS" as "OWNERS_MANAGERS" | "ALL" | "CUSTOM",
     target_user_ids: [] as string[],
   });
 
@@ -46,21 +53,31 @@ export default function ReminderSettingsPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const resetForm = () => { setForm({ name: "", days_of_week: ["MON", "WED", "FRI"], time_of_day: "21:00", timezone: "America/New_York", is_enabled: true, target_user_ids: [] }); setEditId(null); };
+  const resetForm = () => {
+    setForm({ name: "", days_of_week: ["MON", "WED", "FRI"], time_of_day: "21:00", timezone: "America/New_York", is_enabled: true, recipients_mode: "OWNERS_MANAGERS", target_user_ids: [] });
+    setEditId(null);
+  };
 
   const handleSave = async () => {
     if (!currentRestaurant || !user || !form.name.trim()) { toast.error("Name is required"); return; }
     if (editId) {
-      await supabase.from("reminders").update({ name: form.name, days_of_week: form.days_of_week, time_of_day: form.time_of_day, timezone: form.timezone, is_enabled: form.is_enabled }).eq("id", editId);
-      // Update targets
+      await supabase.from("reminders").update({
+        name: form.name, days_of_week: form.days_of_week, time_of_day: form.time_of_day,
+        timezone: form.timezone, is_enabled: form.is_enabled, recipients_mode: form.recipients_mode,
+      }).eq("id", editId);
+      // Update targets for CUSTOM mode
       await supabase.from("reminder_targets").delete().eq("reminder_id", editId);
-      if (form.target_user_ids.length > 0) {
+      if (form.recipients_mode === "CUSTOM" && form.target_user_ids.length > 0) {
         await supabase.from("reminder_targets").insert(form.target_user_ids.map(uid => ({ reminder_id: editId, user_id: uid })));
       }
       toast.success("Reminder updated");
     } else {
-      const { data } = await supabase.from("reminders").insert({ restaurant_id: currentRestaurant.id, created_by: user.id, name: form.name, days_of_week: form.days_of_week, time_of_day: form.time_of_day, timezone: form.timezone, is_enabled: form.is_enabled }).select("id").single();
-      if (data && form.target_user_ids.length > 0) {
+      const { data } = await supabase.from("reminders").insert({
+        restaurant_id: currentRestaurant.id, created_by: user.id, name: form.name,
+        days_of_week: form.days_of_week, time_of_day: form.time_of_day, timezone: form.timezone,
+        is_enabled: form.is_enabled, recipients_mode: form.recipients_mode,
+      }).select("id").single();
+      if (data && form.recipients_mode === "CUSTOM" && form.target_user_ids.length > 0) {
         await supabase.from("reminder_targets").insert(form.target_user_ids.map(uid => ({ reminder_id: data.id, user_id: uid })));
       }
       toast.success("Reminder created");
@@ -80,17 +97,11 @@ export default function ReminderSettingsPage() {
   };
 
   const toggleDay = (day: string) => {
-    setForm(p => ({
-      ...p,
-      days_of_week: p.days_of_week.includes(day) ? p.days_of_week.filter(d => d !== day) : [...p.days_of_week, day]
-    }));
+    setForm(p => ({ ...p, days_of_week: p.days_of_week.includes(day) ? p.days_of_week.filter(d => d !== day) : [...p.days_of_week, day] }));
   };
 
   const toggleTarget = (uid: string) => {
-    setForm(p => ({
-      ...p,
-      target_user_ids: p.target_user_ids.includes(uid) ? p.target_user_ids.filter(u => u !== uid) : [...p.target_user_ids, uid]
-    }));
+    setForm(p => ({ ...p, target_user_ids: p.target_user_ids.includes(uid) ? p.target_user_ids.filter(u => u !== uid) : [...p.target_user_ids, uid] }));
   };
 
   return (
@@ -122,7 +133,7 @@ export default function ReminderSettingsPage() {
                   <TableHead className="text-xs font-semibold">Name</TableHead>
                   <TableHead className="text-xs font-semibold">Schedule</TableHead>
                   <TableHead className="text-xs font-semibold">Time</TableHead>
-                  <TableHead className="text-xs font-semibold">Targets</TableHead>
+                  <TableHead className="text-xs font-semibold">Recipients</TableHead>
                   <TableHead className="text-xs font-semibold">Status</TableHead>
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
@@ -139,7 +150,10 @@ export default function ReminderSettingsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm font-mono">{r.time_of_day}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{r.reminder_targets?.length || 0} user(s)</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {RECIPIENTS_LABELS[(r as any).recipients_mode] || "Owners & Managers"}
+                      {(r as any).recipients_mode === "CUSTOM" && ` (${r.reminder_targets?.length || 0})`}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={r.is_enabled ? "default" : "secondary"} className="text-[10px]">
                         {r.is_enabled ? "Active" : "Paused"}
@@ -156,6 +170,7 @@ export default function ReminderSettingsPage() {
                               time_of_day: r.time_of_day,
                               timezone: r.timezone,
                               is_enabled: r.is_enabled,
+                              recipients_mode: (r as any).recipients_mode || "OWNERS_MANAGERS",
                               target_user_ids: r.reminder_targets?.map((t: any) => t.user_id) || [],
                             });
                             setOpen(true);
@@ -207,17 +222,36 @@ export default function ReminderSettingsPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Notify these users</Label>
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {members.map((m: any) => (
-                  <label key={m.user_id} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-muted/50 cursor-pointer">
-                    <input type="checkbox" checked={form.target_user_ids.includes(m.user_id)} onChange={() => toggleTarget(m.user_id)} className="rounded" />
-                    <span className="text-xs">{m.profiles?.full_name || m.profiles?.email}</span>
-                    <Badge variant="secondary" className="text-[9px] ml-auto">{m.role}</Badge>
-                  </label>
-                ))}
-              </div>
+              <Label className="text-xs">Recipients</Label>
+              <Select
+                value={form.recipients_mode}
+                onValueChange={(v: "OWNERS_MANAGERS" | "ALL" | "CUSTOM") => setForm(p => ({ ...p, recipients_mode: v }))}
+              >
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="OWNERS_MANAGERS">Owners &amp; Managers only</SelectItem>
+                  <SelectItem value="ALL">All team members (incl. Staff)</SelectItem>
+                  <SelectItem value="CUSTOM">Custom selection</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {form.recipients_mode === "CUSTOM" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Select users</Label>
+                <div className="space-y-1 max-h-32 overflow-y-auto border rounded-md p-2">
+                  {members.map((m: any) => (
+                    <label key={m.user_id} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-muted/50 cursor-pointer">
+                      <Checkbox
+                        checked={form.target_user_ids.includes(m.user_id)}
+                        onCheckedChange={() => toggleTarget(m.user_id)}
+                      />
+                      <span className="text-xs">{m.profiles?.full_name || m.profiles?.email}</span>
+                      <Badge variant="secondary" className="text-[9px] ml-auto">{m.role}</Badge>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter><Button onClick={handleSave} className="bg-gradient-amber shadow-amber">{editId ? "Update" : "Create Reminder"}</Button></DialogFooter>
         </DialogContent>

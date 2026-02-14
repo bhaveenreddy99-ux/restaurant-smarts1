@@ -14,6 +14,32 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_recipients: {
+        Row: {
+          id: string
+          notification_pref_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          notification_pref_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          notification_pref_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_recipients_notification_pref_id_fkey"
+            columns: ["notification_pref_id"]
+            isOneToOne: false
+            referencedRelation: "notification_preferences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_list_items: {
         Row: {
           id: string
@@ -602,6 +628,7 @@ export type Database = {
           location_id: string | null
           low_stock_red: boolean
           low_stock_yellow: boolean
+          recipients_mode: Database["public"]["Enums"]["recipients_mode"]
           restaurant_id: string
           timezone: string
           updated_at: string
@@ -617,6 +644,7 @@ export type Database = {
           location_id?: string | null
           low_stock_red?: boolean
           low_stock_yellow?: boolean
+          recipients_mode?: Database["public"]["Enums"]["recipients_mode"]
           restaurant_id: string
           timezone?: string
           updated_at?: string
@@ -632,6 +660,7 @@ export type Database = {
           location_id?: string | null
           low_stock_red?: boolean
           low_stock_yellow?: boolean
+          recipients_mode?: Database["public"]["Enums"]["recipients_mode"]
           restaurant_id?: string
           timezone?: string
           updated_at?: string
@@ -1082,6 +1111,7 @@ export type Database = {
           is_enabled: boolean
           location_id: string | null
           name: string
+          recipients_mode: Database["public"]["Enums"]["recipients_mode"]
           restaurant_id: string
           time_of_day: string
           timezone: string
@@ -1095,6 +1125,7 @@ export type Database = {
           is_enabled?: boolean
           location_id?: string | null
           name: string
+          recipients_mode?: Database["public"]["Enums"]["recipients_mode"]
           restaurant_id: string
           time_of_day?: string
           timezone?: string
@@ -1108,6 +1139,7 @@ export type Database = {
           is_enabled?: boolean
           location_id?: string | null
           name?: string
+          recipients_mode?: Database["public"]["Enums"]["recipients_mode"]
           restaurant_id?: string
           time_of_day?: string
           timezone?: string
@@ -1474,6 +1506,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      alert_pref_restaurant_id: { Args: { pref_id: string }; Returns: string }
       create_restaurant_with_owner: {
         Args: { p_is_demo?: boolean; p_name: string }
         Returns: {
@@ -1523,6 +1556,7 @@ export type Database = {
       email_digest_mode: "IMMEDIATE" | "DAILY_DIGEST"
       notification_severity: "INFO" | "WARNING" | "CRITICAL"
       order_status: "PENDING" | "PREP" | "READY" | "COMPLETED" | "CANCELED"
+      recipients_mode: "OWNERS_MANAGERS" | "ALL" | "CUSTOM"
       session_status: "IN_PROGRESS" | "IN_REVIEW" | "APPROVED"
     }
     CompositeTypes: {
@@ -1655,6 +1689,7 @@ export const Constants = {
       email_digest_mode: ["IMMEDIATE", "DAILY_DIGEST"],
       notification_severity: ["INFO", "WARNING", "CRITICAL"],
       order_status: ["PENDING", "PREP", "READY", "COMPLETED", "CANCELED"],
+      recipients_mode: ["OWNERS_MANAGERS", "ALL", "CUSTOM"],
       session_status: ["IN_PROGRESS", "IN_REVIEW", "APPROVED"],
     },
   },

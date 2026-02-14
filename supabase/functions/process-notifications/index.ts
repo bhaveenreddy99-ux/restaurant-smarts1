@@ -5,6 +5,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ─── Helper: resolve recipient user IDs based on recipients_mode ───
+async function resolveRecipients(
+  supabase: any,
+  restaurantId: string,
+  recipientsMode: string,
+  customUserIds: string[],
+): Promise<string[]> {
+  if (recipientsMode === "CUSTOM" && customUserIds.length > 0) {
+    return customUserIds;
+  }
+
+  const roleFilter = recipientsMode === "ALL"
+    ? ["OWNER", "MANAGER", "STAFF"]
+    : ["OWNER", "MANAGER"];
+
+  const { data: members } = await supabase
+    .from("restaurant_members")
+    .select("user_id, role")
+    .eq("restaurant_id", restaurantId)
+    .in("role", roleFilter);
+
+  return (members || []).map((m: any) => m.user_id);
+}
+
 function buildAlertEmailHtml(restaurantName: string, locationName: string | null, items: any[], timestamp: string): string {
   const rows = items.map(i => `
     <tr>
@@ -97,7 +121,6 @@ Deno.serve(async (req) => {
     const results: string[] = [];
 
     // ─── 1) Process Low Stock Alerts ───
-    // Get all restaurants and their latest approved sessions
     const { data: restaurants } = await supabase.from("restaurants").select("id, name");
     
     for (const restaurant of restaurants || []) {
@@ -111,9 +134,8 @@ Deno.serve(async (req) => {
 
       if (!sessions?.length) continue;
 
-      // Deduplicate to latest per list
       const seenLists = new Set<string>();
-      const latestSessions = sessions.filter(s => {
+      const latestSessions = sessions.filter((s: any) => {
         if (seenLists.has(s.inventory_list_id)) return false;
         seenLists.add(s.inventory_list_id);
         return true;
@@ -127,56 +149,65 @@ Deno.serve(async (req) => {
 
         if (!items?.length) continue;
 
-        const alertItems = items.filter(i => {
+        const alertItems = items.filter((i: any) => {
           const ratio = i.current_stock / Math.max(i.par_level, 1);
           return ratio < 1;
-        }).map(i => ({
+        }).map((i: any) => ({
           ...i,
           risk: (i.current_stock / Math.max(i.par_level, 1)) < 0.5 ? "RED" : "YELLOW",
         }));
 
         if (alertItems.length === 0) continue;
 
-        // Get members of this restaurant
-        const { data: members } = await supabase
-          .from("restaurant_members")
-          .select("user_id")
-          .eq("restaurant_id", restaurant.id);
+        // Get the restaurant-level alert preferences to determine recipients_mode
+        // We use the first pref we find (typically the owner's) as the "master" config
+        const { data: alertPrefs } = await supabase
+          .from("notification_preferences")
+          .select("*, alert_recipients(user_id)")
+          .eq("restaurant_id", restaurant.id)
+          .limit(1);
 
-        for (const member of members || []) {
-          // Check preferences
+        const masterPref = alertPrefs?.[0];
+        const recipientsMode = masterPref?.recipients_mode || "OWNERS_MANAGERS";
+        const customUserIds = masterPref?.alert_recipients?.map((r: any) => r.user_id) || [];
+
+        // Resolve which users should receive alerts
+        const recipientUserIds = await resolveRecipients(supabase, restaurant.id, recipientsMode, customUserIds);
+
+        for (const userId of recipientUserIds) {
+          // Check per-user preferences
           const { data: pref } = await supabase
             .from("notification_preferences")
             .select("*")
             .eq("restaurant_id", restaurant.id)
-            .eq("user_id", member.user_id)
+            .eq("user_id", userId)
             .maybeSingle();
 
           const shouldAlertRed = pref?.low_stock_red ?? true;
           const shouldAlertYellow = pref?.low_stock_yellow ?? false;
 
-          const filteredItems = alertItems.filter(i =>
+          const filteredItems = alertItems.filter((i: any) =>
             (i.risk === "RED" && shouldAlertRed) || (i.risk === "YELLOW" && shouldAlertYellow)
           );
 
           if (filteredItems.length === 0) continue;
 
-          const redCount = filteredItems.filter(i => i.risk === "RED").length;
-          const yellowCount = filteredItems.filter(i => i.risk === "YELLOW").length;
+          const redCount = filteredItems.filter((i: any) => i.risk === "RED").length;
+          const yellowCount = filteredItems.filter((i: any) => i.risk === "YELLOW").length;
 
-          // Check if we already created a notification for this user+restaurant today
+          // Check if already notified today
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
           const { data: existing } = await supabase
             .from("notifications")
             .select("id")
-            .eq("user_id", member.user_id)
+            .eq("user_id", userId)
             .eq("restaurant_id", restaurant.id)
             .eq("type", "LOW_STOCK")
             .gte("created_at", todayStart.toISOString())
             .limit(1);
 
-          if (existing?.length) continue; // Already notified today
+          if (existing?.length) continue;
 
           // Create in-app notification
           const channelInApp = pref?.channel_in_app ?? true;
@@ -184,12 +215,12 @@ Deno.serve(async (req) => {
             await supabase.from("notifications").insert({
               restaurant_id: restaurant.id,
               location_id: session.location_id,
-              user_id: member.user_id,
+              user_id: userId,
               type: "LOW_STOCK",
               title: `${redCount} critical, ${yellowCount} low stock items`,
-              message: `${restaurant.name}: ${filteredItems.map(i => i.item_name).slice(0, 5).join(", ")}${filteredItems.length > 5 ? ` and ${filteredItems.length - 5} more` : ""}`,
+              message: `${restaurant.name}: ${filteredItems.map((i: any) => i.item_name).slice(0, 5).join(", ")}${filteredItems.length > 5 ? ` and ${filteredItems.length - 5} more` : ""}`,
               severity: redCount > 0 ? "CRITICAL" : "WARNING",
-              data: { items: filteredItems.map(i => ({ item_name: i.item_name, current_stock: i.current_stock, par_level: i.par_level, risk: i.risk })) },
+              data: { items: filteredItems.map((i: any) => ({ item_name: i.item_name, current_stock: i.current_stock, par_level: i.par_level, risk: i.risk })) },
             });
           }
 
@@ -201,14 +232,13 @@ Deno.serve(async (req) => {
             const { data: profile } = await supabase
               .from("profiles")
               .select("email")
-              .eq("id", member.user_id)
+              .eq("id", userId)
               .single();
 
             if (profile?.email) {
               const locationName = session.location_id ? (await supabase.from("locations").select("name").eq("id", session.location_id).single())?.data?.name : null;
               const html = buildAlertEmailHtml(restaurant.name, locationName, filteredItems, now.toISOString());
 
-              // Call send-email function
               await fetch(`${supabaseUrl}/functions/v1/send-email`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
@@ -223,7 +253,6 @@ Deno.serve(async (req) => {
     }
 
     // ─── 2) Process Reminders ───
-    const currentMinute = now.getMinutes();
     const dayMap: Record<number, string> = { 0: "SUN", 1: "MON", 2: "TUE", 3: "WED", 4: "THU", 5: "FRI", 6: "SAT" };
 
     const { data: reminders } = await supabase
@@ -232,10 +261,8 @@ Deno.serve(async (req) => {
       .eq("is_enabled", true);
 
     for (const reminder of reminders || []) {
-      // Check if current time matches (within 5 min window)
       const [targetHour, targetMin] = (reminder.time_of_day || "21:00").split(":").map(Number);
       
-      // Simple timezone offset (approximate)
       const tzOffsets: Record<string, number> = {
         "America/New_York": -5, "America/Chicago": -6, "America/Denver": -7, "America/Los_Angeles": -8,
       };
@@ -245,23 +272,25 @@ Deno.serve(async (req) => {
       const nowUTC = now.getUTCHours();
       const nowMin = now.getUTCMinutes();
 
-      // Check within 5-min window
       if (nowUTC !== utcHour || Math.abs(nowMin - targetMin) > 4) continue;
 
-      // Check day of week
-      const dayInTz = dayMap[now.getUTCDay()]; // Simplified
+      const dayInTz = dayMap[now.getUTCDay()];
       const days = reminder.days_of_week as string[];
       if (!days?.includes(dayInTz)) continue;
 
-      // Check if already sent today
+      // Resolve recipients based on recipients_mode
+      const recipientsMode = reminder.recipients_mode || "OWNERS_MANAGERS";
+      const customUserIds = (reminder.reminder_targets || []).map((t: any) => t.user_id);
+      const recipientUserIds = await resolveRecipients(supabase, reminder.restaurant_id, recipientsMode, customUserIds);
+
       const todayStart = new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
 
-      for (const target of reminder.reminder_targets || []) {
+      for (const userId of recipientUserIds) {
         const { data: existing } = await supabase
           .from("notifications")
           .select("id")
-          .eq("user_id", target.user_id)
+          .eq("user_id", userId)
           .eq("type", "REMINDER")
           .eq("restaurant_id", reminder.restaurant_id)
           .gte("created_at", todayStart.toISOString())
@@ -272,7 +301,7 @@ Deno.serve(async (req) => {
         await supabase.from("notifications").insert({
           restaurant_id: reminder.restaurant_id,
           location_id: reminder.location_id,
-          user_id: target.user_id,
+          user_id: userId,
           type: "REMINDER",
           title: reminder.name,
           message: `Time to enter inventory for ${reminder.restaurants?.name || "your restaurant"}`,
@@ -285,11 +314,11 @@ Deno.serve(async (req) => {
           .from("notification_preferences")
           .select("*")
           .eq("restaurant_id", reminder.restaurant_id)
-          .eq("user_id", target.user_id)
+          .eq("user_id", userId)
           .maybeSingle();
 
         if (pref?.channel_email !== false && (pref?.email_digest_mode ?? "IMMEDIATE") === "IMMEDIATE") {
-          const { data: profile } = await supabase.from("profiles").select("email").eq("id", target.user_id).single();
+          const { data: profile } = await supabase.from("profiles").select("email").eq("id", userId).single();
           if (profile?.email) {
             const html = buildReminderEmailHtml(
               reminder.restaurants?.name || "Restaurant",
@@ -309,7 +338,6 @@ Deno.serve(async (req) => {
     }
 
     // ─── 3) Process Daily Digests ───
-    // Find users whose digest hour matches now
     const { data: digestPrefs } = await supabase
       .from("notification_preferences")
       .select("*")
@@ -325,7 +353,6 @@ Deno.serve(async (req) => {
 
       if (now.getUTCHours() !== userHourUTC || now.getUTCMinutes() > 4) continue;
 
-      // Get unread notifications from last 24h that haven't been emailed
       const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const { data: pendingNotifs } = await supabase
         .from("notifications")
@@ -340,14 +367,13 @@ Deno.serve(async (req) => {
       const { data: profile } = await supabase.from("profiles").select("email, full_name").eq("id", pref.user_id).single();
       if (!profile?.email) continue;
 
-      // Group by restaurant/location
       const { data: restaurant } = await supabase.from("restaurants").select("name").eq("id", pref.restaurant_id).single();
       
       const groups = [{
         restaurantName: restaurant?.name || "Restaurant",
         locationName: null as string | null,
         items: pendingNotifs
-          .filter(n => n.data?.items)
+          .filter((n: any) => n.data?.items)
           .flatMap((n: any) => n.data.items || []),
       }];
 
@@ -359,8 +385,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ to: profile.email, subject: `📋 Daily Inventory Digest`, html }),
         });
 
-        // Mark as emailed
-        const ids = pendingNotifs.map(n => n.id);
+        const ids = pendingNotifs.map((n: any) => n.id);
         for (const id of ids) {
           await supabase.from("notifications").update({ emailed_at: now.toISOString() }).eq("id", id);
         }
