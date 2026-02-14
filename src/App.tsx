@@ -24,6 +24,7 @@ import OrdersPage from "@/pages/app/Orders";
 import ReportsPage from "@/pages/app/Reports";
 import StaffPage from "@/pages/app/Staff";
 import PurchaseHistoryPage from "@/pages/app/PurchaseHistory";
+import SettingsPage from "@/pages/app/Settings";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,6 +59,7 @@ const App = () => (
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="staff" element={<StaffPage />} />
                 <Route path="purchase-history" element={<PurchaseHistoryPage />} />
+                <Route path="settings" element={<SettingsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

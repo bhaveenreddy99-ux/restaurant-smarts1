@@ -336,6 +336,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          location_id: string | null
           name: string
           restaurant_id: string
         }
@@ -343,6 +344,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          location_id?: string | null
           name: string
           restaurant_id: string
         }
@@ -350,10 +352,18 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          location_id?: string | null
           name?: string
           restaurant_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_lists_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_lists_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -426,6 +436,7 @@ export type Database = {
           created_by: string | null
           id: string
           inventory_list_id: string
+          location_id: string | null
           name: string
           restaurant_id: string
           status: Database["public"]["Enums"]["session_status"]
@@ -437,6 +448,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           inventory_list_id: string
+          location_id?: string | null
           name: string
           restaurant_id: string
           status?: Database["public"]["Enums"]["session_status"]
@@ -448,6 +460,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           inventory_list_id?: string
+          location_id?: string | null
           name?: string
           restaurant_id?: string
           status?: Database["public"]["Enums"]["session_status"]
@@ -462,7 +475,115 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "inventory_sessions_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "inventory_sessions_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_settings: {
+        Row: {
+          auto_category_enabled: boolean
+          autosave_enabled: boolean
+          categories: Json
+          created_at: string
+          default_location_id: string | null
+          id: string
+          restaurant_id: string
+          units: Json
+          updated_at: string
+        }
+        Insert: {
+          auto_category_enabled?: boolean
+          autosave_enabled?: boolean
+          categories?: Json
+          created_at?: string
+          default_location_id?: string | null
+          id?: string
+          restaurant_id: string
+          units?: Json
+          updated_at?: string
+        }
+        Update: {
+          auto_category_enabled?: boolean
+          autosave_enabled?: boolean
+          categories?: Json
+          created_at?: string
+          default_location_id?: string | null
+          id?: string
+          restaurant_id?: string
+          units?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_settings_default_location_id_fkey"
+            columns: ["default_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_settings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: true
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      locations: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          is_default: boolean
+          name: string
+          restaurant_id: string
+          state: string | null
+          storage_types: Json | null
+          zip: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          restaurant_id: string
+          state?: string | null
+          storage_types?: Json | null
+          zip?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          restaurant_id?: string
+          state?: string | null
+          storage_types?: Json | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locations_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
@@ -627,6 +748,44 @@ export type Database = {
           },
         ]
       }
+      par_settings: {
+        Row: {
+          auto_apply_last_par: boolean
+          created_at: string
+          default_lead_time_days: number
+          default_reorder_threshold: number
+          id: string
+          restaurant_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_apply_last_par?: boolean
+          created_at?: string
+          default_lead_time_days?: number
+          default_reorder_threshold?: number
+          id?: string
+          restaurant_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_apply_last_par?: boolean
+          created_at?: string
+          default_lead_time_days?: number
+          default_reorder_threshold?: number
+          id?: string
+          restaurant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "par_settings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: true
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -738,6 +897,7 @@ export type Database = {
       restaurant_members: {
         Row: {
           created_at: string
+          default_location_id: string | null
           id: string
           restaurant_id: string
           role: Database["public"]["Enums"]["app_role"]
@@ -745,6 +905,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_location_id?: string | null
           id?: string
           restaurant_id: string
           role?: Database["public"]["Enums"]["app_role"]
@@ -752,6 +913,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_location_id?: string | null
           id?: string
           restaurant_id?: string
           role?: Database["public"]["Enums"]["app_role"]
@@ -759,9 +921,63 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "restaurant_members_default_location_id_fkey"
+            columns: ["default_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "restaurant_members_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      restaurant_settings: {
+        Row: {
+          address: string | null
+          business_email: string | null
+          created_at: string
+          currency: string
+          date_format: string
+          id: string
+          phone: string | null
+          restaurant_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          business_email?: string | null
+          created_at?: string
+          currency?: string
+          date_format?: string
+          id?: string
+          phone?: string | null
+          restaurant_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          business_email?: string | null
+          created_at?: string
+          currency?: string
+          date_format?: string
+          id?: string
+          phone?: string | null
+          restaurant_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_settings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: true
             referencedRelation: "restaurants"
             referencedColumns: ["id"]
           },
@@ -832,6 +1048,7 @@ export type Database = {
           created_by: string | null
           id: string
           inventory_list_id: string | null
+          location_id: string | null
           par_guide_id: string | null
           restaurant_id: string
           session_id: string
@@ -841,6 +1058,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           inventory_list_id?: string | null
+          location_id?: string | null
           par_guide_id?: string | null
           restaurant_id: string
           session_id: string
@@ -850,6 +1068,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           inventory_list_id?: string | null
+          location_id?: string | null
           par_guide_id?: string | null
           restaurant_id?: string
           session_id?: string
@@ -860,6 +1079,13 @@ export type Database = {
             columns: ["inventory_list_id"]
             isOneToOne: false
             referencedRelation: "inventory_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_order_runs_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
           {
@@ -881,6 +1107,47 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "inventory_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      smart_order_settings: {
+        Row: {
+          auto_calculate_cost: boolean
+          auto_create_purchase_history: boolean
+          created_at: string
+          id: string
+          red_threshold: number
+          restaurant_id: string
+          updated_at: string
+          yellow_threshold: number
+        }
+        Insert: {
+          auto_calculate_cost?: boolean
+          auto_create_purchase_history?: boolean
+          created_at?: string
+          id?: string
+          red_threshold?: number
+          restaurant_id: string
+          updated_at?: string
+          yellow_threshold?: number
+        }
+        Update: {
+          auto_calculate_cost?: boolean
+          auto_create_purchase_history?: boolean
+          created_at?: string
+          id?: string
+          red_threshold?: number
+          restaurant_id?: string
+          updated_at?: string
+          yellow_threshold?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_order_settings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: true
+            referencedRelation: "restaurants"
             referencedColumns: ["id"]
           },
         ]
