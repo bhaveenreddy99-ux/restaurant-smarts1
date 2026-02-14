@@ -9,18 +9,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-  BreadcrumbPage, BreadcrumbSeparator } from
-"@/components/ui/breadcrumb";
+  BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { toast } from "sonner";
 import {
   Plus, Send, Package, BookOpen, Play, ArrowLeft, Eye, CheckCircle,
-  XCircle, ShoppingCart, Copy, Clock, ClipboardCheck, Trash2, ChevronRight } from
-"lucide-react";
+  XCircle, ShoppingCart, Copy, Clock, ClipboardCheck, Trash2, ChevronRight, Eraser } from "lucide-react";
 
 const defaultCategories = ["Frozen", "Cooler", "Dry"];
 
@@ -60,16 +63,25 @@ export default function EnterInventoryPage() {
   const [viewItems, setViewItems] = useState<any[] | null>(null);
   const [viewSession, setViewSession] = useState<any>(null);
 
+  // Clear entries confirm
+  const [clearEntriesSessionId, setClearEntriesSessionId] = useState<string | null>(null);
+
+  // Create Smart Order modal
+  const [smartOrderSession, setSmartOrderSession] = useState<any>(null);
+  const [smartOrderParGuides, setSmartOrderParGuides] = useState<any[]>([]);
+  const [smartOrderSelectedPar, setSmartOrderSelectedPar] = useState("");
+  const [smartOrderCreating, setSmartOrderCreating] = useState(false);
+
   // Fetch lists
   useEffect(() => {
     if (!currentRestaurant) return;
-    supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id).
-    then(({ data }) => {
-      if (data) {
-        setLists(data);
-        if (data.length > 0 && !selectedList) setSelectedList(data[0].id);
-      }
-    });
+    supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id)
+      .then(({ data }) => {
+        if (data) {
+          setLists(data);
+          if (data.length > 0 && !selectedList) setSelectedList(data[0].id);
+        }
+      });
   }, [currentRestaurant]);
 
   // Fetch sessions when list changes
@@ -82,33 +94,28 @@ export default function EnterInventoryPage() {
     if (!currentRestaurant) return;
     setLoading(true);
 
-    const baseQuery = supabase.from("inventory_sessions").select("*, inventory_lists(name), inventory_session_items(id)").eq("restaurant_id", currentRestaurant.id);
-
-    // In Progress
-    const { data: ip } = await supabase.from("inventory_sessions").
-    select("*, inventory_lists(name)").
-    eq("restaurant_id", currentRestaurant.id).
-    eq("status", "IN_PROGRESS").
-    order("updated_at", { ascending: false });
+    const { data: ip } = await supabase.from("inventory_sessions")
+      .select("*, inventory_lists(name)")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("status", "IN_PROGRESS")
+      .order("updated_at", { ascending: false });
     setInProgressSessions((ip || []).filter((s) => !selectedList || s.inventory_list_id === selectedList));
 
-    // Review
-    const { data: rv } = await supabase.from("inventory_sessions").
-    select("*, inventory_lists(name)").
-    eq("restaurant_id", currentRestaurant.id).
-    eq("status", "IN_REVIEW").
-    order("updated_at", { ascending: false });
+    const { data: rv } = await supabase.from("inventory_sessions")
+      .select("*, inventory_lists(name)")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("status", "IN_REVIEW")
+      .order("updated_at", { ascending: false });
     setReviewSessions((rv || []).filter((s) => !selectedList || s.inventory_list_id === selectedList));
 
-    // Approved with date filter
     const daysAgo = new Date();
     daysAgo.setDate(daysAgo.getDate() - parseInt(approvedFilter));
-    const { data: ap } = await supabase.from("inventory_sessions").
-    select("*, inventory_lists(name)").
-    eq("restaurant_id", currentRestaurant.id).
-    eq("status", "APPROVED").
-    gte("approved_at", daysAgo.toISOString()).
-    order("approved_at", { ascending: false });
+    const { data: ap } = await supabase.from("inventory_sessions")
+      .select("*, inventory_lists(name)")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("status", "APPROVED")
+      .gte("approved_at", daysAgo.toISOString())
+      .order("approved_at", { ascending: false });
     setApprovedSessions((ap || []).filter((s) => !selectedList || s.inventory_list_id === selectedList));
 
     setLoading(false);
@@ -116,14 +123,14 @@ export default function EnterInventoryPage() {
 
   // PAR guides for selected list
   useEffect(() => {
-    if (!currentRestaurant || !selectedList) {setParGuides([]);return;}
-    supabase.from("par_guides").select("*").eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList).
-    then(({ data }) => {if (data) setParGuides(data);});
+    if (!currentRestaurant || !selectedList) { setParGuides([]); return; }
+    supabase.from("par_guides").select("*").eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList)
+      .then(({ data }) => { if (data) setParGuides(data); });
   }, [currentRestaurant, selectedList]);
 
   useEffect(() => {
-    if (!selectedPar) {setParItems([]);return;}
-    supabase.from("par_guide_items").select("*").eq("par_guide_id", selectedPar).then(({ data }) => {if (data) setParItems(data);});
+    if (!selectedPar) { setParItems([]); return; }
+    supabase.from("par_guide_items").select("*").eq("par_guide_id", selectedPar).then(({ data }) => { if (data) setParItems(data); });
   }, [selectedPar]);
 
   // Create session
@@ -135,14 +142,13 @@ export default function EnterInventoryPage() {
       name: sessionName,
       created_by: user.id
     }).select().single();
-    if (error) {toast.error(error.message);return;}
+    if (error) { toast.error(error.message); return; }
 
-    // Pre-populate from catalog
-    const { data: catItems } = await supabase.from("inventory_catalog_items").select("*").
-    eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList);
+    const { data: catItems } = await supabase.from("inventory_catalog_items").select("*")
+      .eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList);
 
     const parMap: Record<string, number> = {};
-    parItems.forEach((p) => {parMap[p.item_name] = Number(p.par_level);});
+    parItems.forEach((p) => { parMap[p.item_name] = Number(p.par_level); });
 
     if (catItems && catItems.length > 0) {
       const preItems = catItems.map((ci) => ({
@@ -182,10 +188,9 @@ export default function EnterInventoryPage() {
     setActiveSession(session);
     const { data } = await supabase.from("inventory_session_items").select("*").eq("session_id", session.id);
     if (data) setItems(data);
-    // Fetch catalog for "From Catalog" button
     if (currentRestaurant) {
-      const { data: cats } = await supabase.from("inventory_catalog_items").select("*").
-      eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", session.inventory_list_id);
+      const { data: cats } = await supabase.from("inventory_catalog_items").select("*")
+        .eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", session.inventory_list_id);
       if (cats) setCatalogItems(cats);
     }
   };
@@ -194,7 +199,7 @@ export default function EnterInventoryPage() {
     if (!activeSession) return;
     const payload = { session_id: activeSession.id, ...newItem };
     const { data, error } = await supabase.from("inventory_session_items").insert(payload).select().single();
-    if (error) {toast.error(error.message);return;}
+    if (error) { toast.error(error.message); return; }
     setItems([...items, data]);
     setNewItem({ item_name: "", category: "Cooler", unit: "", current_stock: 0, par_level: 0, unit_cost: 0 });
     setCreateOpen(false);
@@ -215,7 +220,7 @@ export default function EnterInventoryPage() {
       vendor_name: catalogItem.vendor_name || null
     };
     const { data, error } = await supabase.from("inventory_session_items").insert(payload).select().single();
-    if (error) {toast.error(error.message);return;}
+    if (error) { toast.error(error.message); return; }
     setItems([...items, data]);
     toast.success(`Added ${catalogItem.item_name}`);
   };
@@ -228,28 +233,46 @@ export default function EnterInventoryPage() {
   const handleSubmitForReview = async () => {
     if (!activeSession) return;
     const { error } = await supabase.from("inventory_sessions").update({ status: "IN_REVIEW", updated_at: new Date().toISOString() }).eq("id", activeSession.id);
-    if (error) toast.error(error.message);else
-    {toast.success("Submitted for review!");setActiveSession(null);setItems([]);fetchSessions();}
+    if (error) toast.error(error.message);
+    else { toast.success("Submitted for review!"); setActiveSession(null); setItems([]); fetchSessions(); }
   };
 
-  const handleClearSession = async (sessionId: string) => {
+  const handleDeleteSession = async (sessionId: string) => {
+    await supabase.from("inventory_session_items").delete().eq("session_id", sessionId);
     const { error } = await supabase.from("inventory_sessions").delete().eq("id", sessionId);
-    if (error) toast.error(error.message);else
-    {toast.success("Session cleared");fetchSessions();}
+    if (error) toast.error(error.message);
+    else { toast.success("Session deleted"); fetchSessions(); }
+  };
+
+  // Clear entries: reset current_stock to 0 for all items in session
+  const handleClearEntries = async () => {
+    if (!clearEntriesSessionId) return;
+    const { error } = await supabase.from("inventory_session_items")
+      .update({ current_stock: 0 })
+      .eq("session_id", clearEntriesSessionId);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Entries cleared — ready for recount");
+      setClearEntriesSessionId(null);
+      // If we're in the editor for this session, refresh items
+      if (activeSession?.id === clearEntriesSessionId) {
+        setItems(items.map(i => ({ ...i, current_stock: 0 })));
+      }
+    }
   };
 
   const handleApprove = async (sessionId: string) => {
     const { error } = await supabase.from("inventory_sessions").update({
       status: "APPROVED", approved_at: new Date().toISOString(), approved_by: user?.id, updated_at: new Date().toISOString()
     }).eq("id", sessionId);
-    if (error) toast.error(error.message);else
-    {toast.success("Session approved!");fetchSessions();}
+    if (error) toast.error(error.message);
+    else { toast.success("Session approved!"); fetchSessions(); }
   };
 
   const handleReject = async (sessionId: string) => {
     const { error } = await supabase.from("inventory_sessions").update({ status: "IN_PROGRESS", updated_at: new Date().toISOString() }).eq("id", sessionId);
-    if (error) toast.error(error.message);else
-    {toast.success("Session sent back");fetchSessions();}
+    if (error) toast.error(error.message);
+    else { toast.success("Session sent back"); fetchSessions(); }
   };
 
   const handleView = async (session: any) => {
@@ -266,7 +289,7 @@ export default function EnterInventoryPage() {
       name: `${session.name} (copy)`,
       created_by: user.id
     }).select().single();
-    if (error) {toast.error(error.message);return;}
+    if (error) { toast.error(error.message); return; }
     const { data: srcItems } = await supabase.from("inventory_session_items").select("*").eq("session_id", session.id);
     if (srcItems && srcItems.length > 0) {
       const duped = srcItems.map(({ id, session_id, ...rest }) => ({ ...rest, session_id: newSess.id }));
@@ -274,6 +297,92 @@ export default function EnterInventoryPage() {
     }
     toast.success("Session duplicated");
     fetchSessions();
+  };
+
+  // Create Smart Order from approved session — only asks for PAR guide
+  const openSmartOrderModal = async (session: any) => {
+    setSmartOrderSession(session);
+    setSmartOrderSelectedPar("");
+    // Fetch PAR guides for this session's inventory list
+    if (!currentRestaurant) return;
+    const { data } = await supabase.from("par_guides").select("*")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("inventory_list_id", session.inventory_list_id);
+    setSmartOrderParGuides(data || []);
+  };
+
+  const handleCreateSmartOrder = async () => {
+    if (!smartOrderSession || !smartOrderSelectedPar || !currentRestaurant || !user) return;
+    setSmartOrderCreating(true);
+
+    // Compute smart order
+    const { data: sessionItems } = await supabase.from("inventory_session_items").select("*").eq("session_id", smartOrderSession.id);
+    const { data: parItemsData } = await supabase.from("par_guide_items").select("*").eq("par_guide_id", smartOrderSelectedPar);
+
+    if (!sessionItems) { toast.error("No session items found"); setSmartOrderCreating(false); return; }
+
+    const parMap: Record<string, any> = {};
+    (parItemsData || []).forEach(p => { parMap[p.item_name] = p; });
+
+    const computed = sessionItems.map(i => {
+      const par = parMap[i.item_name];
+      const parLevel = par ? Number(par.par_level) : Number(i.par_level);
+      const currentStock = Number(i.current_stock);
+      const ratio = currentStock / Math.max(parLevel, 1);
+      return {
+        ...i,
+        par_level: parLevel,
+        suggestedOrder: Math.max(parLevel - currentStock, 0),
+        risk: ratio < 0.5 ? "RED" : ratio < 1 ? "YELLOW" : "GREEN",
+      };
+    });
+
+    // Save smart order run
+    const { data: run, error } = await supabase.from("smart_order_runs").insert({
+      restaurant_id: currentRestaurant.id,
+      session_id: smartOrderSession.id,
+      inventory_list_id: smartOrderSession.inventory_list_id,
+      par_guide_id: smartOrderSelectedPar,
+      created_by: user.id,
+    }).select().single();
+    if (error) { toast.error(error.message); setSmartOrderCreating(false); return; }
+
+    const runItems = computed.map(i => ({
+      run_id: run.id,
+      item_name: i.item_name,
+      suggested_order: i.suggestedOrder,
+      risk: i.risk,
+      current_stock: i.current_stock,
+      par_level: i.par_level,
+      unit_cost: i.unit_cost || null,
+    }));
+    await supabase.from("smart_order_run_items").insert(runItems);
+
+    // Create purchase history
+    const { data: ph } = await supabase.from("purchase_history").insert({
+      restaurant_id: currentRestaurant.id,
+      inventory_list_id: smartOrderSession.inventory_list_id,
+      smart_order_run_id: run.id,
+      created_by: user.id,
+    }).select().single();
+
+    if (ph) {
+      const phItems = computed.filter(i => i.suggestedOrder > 0).map(i => ({
+        purchase_history_id: ph.id,
+        item_name: i.item_name,
+        quantity: i.suggestedOrder,
+        unit_cost: i.unit_cost || null,
+        total_cost: i.unit_cost ? i.suggestedOrder * Number(i.unit_cost) : null,
+      }));
+      if (phItems.length > 0) {
+        await supabase.from("purchase_history_items").insert(phItems);
+      }
+    }
+
+    toast.success("Smart order created with purchase history!");
+    setSmartOrderSession(null);
+    setSmartOrderCreating(false);
+    navigate(`/app/smart-order?viewRun=${run.id}`);
   };
 
   const isManagerOrOwner = currentRestaurant?.role === "OWNER" || currentRestaurant?.role === "MANAGER";
@@ -293,8 +402,8 @@ export default function EnterInventoryPage() {
         <Skeleton className="h-6 w-40" />
         <Skeleton className="h-10 w-64" />
         {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
-      </div>);
-
+      </div>
+    );
   }
 
   // ─── SESSION EDITOR ────────────────────────────
@@ -305,7 +414,7 @@ export default function EnterInventoryPage() {
           <BreadcrumbList>
             <BreadcrumbItem><BreadcrumbLink href="/app/dashboard">Home</BreadcrumbLink></BreadcrumbItem>
             <BreadcrumbSeparator />
-            <BreadcrumbItem><BreadcrumbLink className="cursor-pointer" onClick={() => {setActiveSession(null);fetchSessions();}}>Inventory management</BreadcrumbLink></BreadcrumbItem>
+            <BreadcrumbItem><BreadcrumbLink className="cursor-pointer" onClick={() => { setActiveSession(null); fetchSessions(); }}>Inventory management</BreadcrumbLink></BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem><BreadcrumbPage>{activeSession.name}</BreadcrumbPage></BreadcrumbItem>
           </BreadcrumbList>
@@ -313,7 +422,7 @@ export default function EnterInventoryPage() {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {setActiveSession(null);fetchSessions();}}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setActiveSession(null); fetchSessions(); }}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
@@ -321,9 +430,14 @@ export default function EnterInventoryPage() {
               <p className="text-sm text-muted-foreground">{selectedListName}</p>
             </div>
           </div>
-          <Button onClick={handleSubmitForReview} className="bg-gradient-amber shadow-amber gap-2" disabled={items.length === 0}>
-            <Send className="h-4 w-4" /> Submit for Review
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-2 text-xs h-9" onClick={() => setClearEntriesSessionId(activeSession.id)}>
+              <Eraser className="h-3.5 w-3.5" /> Clear entries
+            </Button>
+            <Button onClick={handleSubmitForReview} className="bg-gradient-amber shadow-amber gap-2" disabled={items.length === 0}>
+              <Send className="h-4 w-4" /> Submit for Review
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2.5 items-center">
@@ -333,7 +447,7 @@ export default function EnterInventoryPage() {
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
               {[...defaultCategories, ...categories.filter((c) => !defaultCategories.includes(c))].map((c) =>
-              <SelectItem key={c} value={c}>{c}</SelectItem>
+                <SelectItem key={c} value={c}>{c}</SelectItem>
               )}
             </SelectContent>
           </Select>
@@ -364,7 +478,7 @@ export default function EnterInventoryPage() {
             </DialogContent>
           </Dialog>
           {catalogItems.length > 0 &&
-          <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
+            <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="gap-1.5 h-9"><BookOpen className="h-3.5 w-3.5" /> From Catalog</Button>
               </DialogTrigger>
@@ -372,14 +486,14 @@ export default function EnterInventoryPage() {
                 <DialogHeader><DialogTitle>Add from Catalog</DialogTitle></DialogHeader>
                 <div className="max-h-80 overflow-y-auto space-y-0.5">
                   {catalogItems.map((ci) =>
-                <div key={ci.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div key={ci.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
                       <div>
                         <p className="text-sm font-medium">{ci.item_name}</p>
                         <p className="text-[11px] text-muted-foreground">{[ci.category, ci.unit, ci.vendor_name].filter(Boolean).join(" · ")}</p>
                       </div>
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleAddFromCatalog(ci)}><Plus className="h-4 w-4" /></Button>
                     </div>
-                )}
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
@@ -387,15 +501,14 @@ export default function EnterInventoryPage() {
         </div>
 
         {filteredItems.length === 0 ?
-        <Card className="border shadow-sm">
+          <Card className="border shadow-sm">
             <CardContent className="empty-state">
               <Package className="empty-state-icon" />
               <p className="empty-state-title">No items yet</p>
               <p className="empty-state-description">Add items manually or from your catalog to start counting.</p>
             </CardContent>
           </Card> :
-
-        <Card className="overflow-hidden border shadow-sm">
+          <Card className="overflow-hidden border shadow-sm">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
@@ -408,7 +521,7 @@ export default function EnterInventoryPage() {
               </TableHeader>
               <TableBody>
                 {filteredItems.map((item) =>
-              <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
+                  <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
                     <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
                     <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{item.unit}</TableCell>
@@ -417,19 +530,32 @@ export default function EnterInventoryPage() {
                     </TableCell>
                     <TableCell className="text-sm font-mono text-muted-foreground">{item.par_level}</TableCell>
                   </TableRow>
-              )}
+                )}
               </TableBody>
             </Table>
           </Card>
         }
-      </div>);
 
+        {/* Clear Entries Confirm */}
+        <AlertDialog open={!!clearEntriesSessionId} onOpenChange={(o) => !o && setClearEntriesSessionId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear all entries?</AlertDialogTitle>
+              <AlertDialogDescription>This will reset all current stock values to 0 for this session. The item rows will be kept so you can recount.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleClearEntries} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Clear Entries</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
   }
 
   // ─── MAIN DASHBOARD: 3 STACKED CARDS ──────────
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Breadcrumb */}
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem><BreadcrumbLink href="/app/dashboard">Home</BreadcrumbLink></BreadcrumbItem>
@@ -456,17 +582,16 @@ export default function EnterInventoryPage() {
         </CardHeader>
         <CardContent className="pt-0">
           {inProgressSessions.length === 0 ?
-          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="flex flex-col items-center justify-center py-10 text-center">
               <Clock className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <p className="text-sm text-muted-foreground mb-4">No inventory in progress</p>
               <Button className="bg-gradient-amber shadow-amber gap-2" onClick={() => setStartOpen(true)}>
                 <Play className="h-4 w-4" /> Start inventory
               </Button>
             </div> :
-
-          <div className="space-y-2">
+            <div className="space-y-2">
               {inProgressSessions.map((s) =>
-            <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
+                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
                   <div className="flex-1">
                     <p className="text-sm font-medium">{s.name}</p>
                     <p className="text-[11px] text-muted-foreground">{s.inventory_lists?.name}</p>
@@ -479,12 +604,15 @@ export default function EnterInventoryPage() {
                     <Button size="sm" className="bg-gradient-amber gap-1.5 h-8 text-xs" onClick={() => openEditor(s)}>
                       Continue
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleClearSession(s.id)}>
+                    <Button size="sm" variant="outline" className="gap-1 h-8 text-xs" onClick={() => setClearEntriesSessionId(s.id)}>
+                      <Eraser className="h-3 w-3" /> Clear
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteSession(s.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
-            )}
+              )}
             </div>
           }
         </CardContent>
@@ -497,14 +625,13 @@ export default function EnterInventoryPage() {
         </CardHeader>
         <CardContent className="pt-0">
           {reviewSessions.length === 0 ?
-          <div className="text-center items-center justify-center flex flex-row py-0">
+            <div className="text-center items-center justify-center flex flex-row py-0">
               <ClipboardCheck className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <p className="text-sm text-muted-foreground">No inventory</p>
             </div> :
-
-          <div className="space-y-2">
+            <div className="space-y-2">
               {reviewSessions.map((s) =>
-            <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
+                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
                   <div className="flex-1">
                     <p className="text-sm font-medium">{s.name}</p>
                     <p className="text-[11px] text-muted-foreground">{s.inventory_lists?.name} • {new Date(s.updated_at).toLocaleDateString()}</p>
@@ -515,7 +642,7 @@ export default function EnterInventoryPage() {
                       <Eye className="h-3.5 w-3.5" /> View
                     </Button>
                     {isManagerOrOwner &&
-                <>
+                      <>
                         <Button size="sm" className="bg-success hover:bg-success/90 gap-1.5 h-8 text-xs text-success-foreground" onClick={() => handleApprove(s.id)}>
                           <CheckCircle className="h-3.5 w-3.5" /> Approve
                         </Button>
@@ -523,10 +650,10 @@ export default function EnterInventoryPage() {
                           <XCircle className="h-3.5 w-3.5" /> Reject
                         </Button>
                       </>
-                }
+                    }
                   </div>
                 </div>
-            )}
+              )}
             </div>
           }
         </CardContent>
@@ -547,14 +674,13 @@ export default function EnterInventoryPage() {
         </CardHeader>
         <CardContent className="pt-0">
           {approvedSessions.length === 0 ?
-          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="flex flex-col items-center justify-center py-10 text-center">
               <CheckCircle className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <p className="text-sm text-muted-foreground">No inventory</p>
             </div> :
-
-          <div className="space-y-2">
+            <div className="space-y-2">
               {approvedSessions.map((s) =>
-            <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
+                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium">{s.name}</p>
@@ -569,12 +695,12 @@ export default function EnterInventoryPage() {
                     <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleDuplicate(s)}>
                       <Copy className="h-3.5 w-3.5" /> Duplicate
                     </Button>
-                    <Button size="sm" className="bg-gradient-amber gap-1.5 h-8 text-xs" onClick={() => navigate(`/app/smart-order?listId=${s.inventory_list_id}&sessionId=${s.id}`)}>
+                    <Button size="sm" className="bg-gradient-amber gap-1.5 h-8 text-xs" onClick={() => openSmartOrderModal(s)}>
                       <ShoppingCart className="h-3.5 w-3.5" /> Create Smart Order
                     </Button>
                   </div>
                 </div>
-            )}
+              )}
             </div>
           }
         </CardContent>
@@ -587,7 +713,7 @@ export default function EnterInventoryPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Inventory List</Label>
-              <Select value={selectedList} onValueChange={(v) => {setSelectedList(v);setSelectedPar("");}}>
+              <Select value={selectedList} onValueChange={(v) => { setSelectedList(v); setSelectedPar(""); }}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="Select list" /></SelectTrigger>
                 <SelectContent>{lists.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
               </Select>
@@ -611,8 +737,40 @@ export default function EnterInventoryPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Create Smart Order Modal — asks ONLY for PAR guide */}
+      <Dialog open={!!smartOrderSession} onOpenChange={(o) => !o && setSmartOrderSession(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Smart Order</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Session: <span className="font-medium text-foreground">{smartOrderSession?.name}</span></p>
+              <p className="text-sm text-muted-foreground">List: <span className="font-medium text-foreground">{smartOrderSession?.inventory_lists?.name}</span></p>
+            </div>
+            <div className="space-y-2">
+              <Label>Select PAR Guide</Label>
+              <Select value={smartOrderSelectedPar} onValueChange={setSmartOrderSelectedPar}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Choose PAR guide" /></SelectTrigger>
+                <SelectContent>
+                  {smartOrderParGuides.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {smartOrderParGuides.length === 0 && (
+                <p className="text-xs text-muted-foreground">No PAR guides found for this list. Create one in PAR Management first.</p>
+              )}
+            </div>
+            <Button
+              onClick={handleCreateSmartOrder}
+              className="w-full bg-gradient-amber"
+              disabled={!smartOrderSelectedPar || smartOrderCreating}
+            >
+              {smartOrderCreating ? "Creating..." : "Create Smart Order"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* View Session Dialog */}
-      <Dialog open={!!viewItems} onOpenChange={() => {setViewItems(null);setViewSession(null);}}>
+      <Dialog open={!!viewItems} onOpenChange={() => { setViewItems(null); setViewSession(null); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{viewSession?.name} — Items</DialogTitle></DialogHeader>
           <div className="rounded-lg border overflow-hidden">
@@ -627,7 +785,7 @@ export default function EnterInventoryPage() {
               </TableHeader>
               <TableBody>
                 {viewItems?.map((item) =>
-                <TableRow key={item.id}>
+                  <TableRow key={item.id}>
                     <TableCell className="text-sm">{item.item_name}</TableCell>
                     <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge></TableCell>
                     <TableCell className="font-mono text-sm">{item.current_stock}</TableCell>
@@ -639,6 +797,20 @@ export default function EnterInventoryPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>);
 
+      {/* Clear Entries Confirm */}
+      <AlertDialog open={!!clearEntriesSessionId} onOpenChange={(o) => !o && setClearEntriesSessionId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all entries?</AlertDialogTitle>
+            <AlertDialogDescription>This will reset all current stock values to 0 for this session. The item rows will be kept so you can recount.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearEntries} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Clear Entries</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
 }

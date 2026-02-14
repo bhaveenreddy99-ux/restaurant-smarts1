@@ -2,8 +2,6 @@ import {
   LayoutDashboard,
   Package,
   ClipboardList,
-  ClipboardCheck,
-  CheckCircle,
   ShoppingCart,
   BookOpen,
   Truck,
@@ -44,8 +42,6 @@ const mainNav = [
 const inventoryNav = [
   { title: "List Management", url: "/app/inventory/lists", icon: ClipboardList },
   { title: "Inventory Management", url: "/app/inventory/enter", icon: Package },
-  { title: "Review", url: "/app/inventory/review", icon: ClipboardCheck },
-  { title: "Approved", url: "/app/inventory/approved", icon: CheckCircle },
   { title: "Smart Order", url: "/app/smart-order", icon: ShoppingCart },
   { title: "Purchase History", url: "/app/purchase-history", icon: Receipt },
 ];

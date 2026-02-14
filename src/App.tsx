@@ -15,8 +15,7 @@ import AppLayout from "@/layouts/AppLayout";
 import DashboardPage from "@/pages/app/Dashboard";
 import InventoryListsPage from "@/pages/app/inventory/InventoryLists";
 import EnterInventoryPage from "@/pages/app/inventory/EnterInventory";
-import ReviewPage from "@/pages/app/inventory/Review";
-import ApprovedPage from "@/pages/app/inventory/Approved";
+// Review and Approved pages removed from sidebar — redirects handle old URLs
 import ImportPage from "@/pages/app/inventory/Import";
 import SmartOrderPage from "@/pages/app/SmartOrder";
 import PARManagementPage from "@/pages/app/PARManagement";
@@ -48,8 +47,9 @@ const App = () => (
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="inventory/lists" element={<InventoryListsPage />} />
                 <Route path="inventory/enter" element={<EnterInventoryPage />} />
-                <Route path="inventory/review" element={<ReviewPage />} />
-                <Route path="inventory/approved" element={<ApprovedPage />} />
+                {/* Review and Approved routes kept for backward compat but redirect */}
+                <Route path="inventory/review" element={<Navigate to="/app/inventory/enter" replace />} />
+                <Route path="inventory/approved" element={<Navigate to="/app/inventory/enter" replace />} />
                 <Route path="inventory/import/:listId" element={<ImportPage />} />
                 <Route path="smart-order" element={<SmartOrderPage />} />
                 <Route path="par" element={<PARManagementPage />} />
