@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
@@ -23,7 +23,9 @@ import {
 import { toast } from "sonner";
 import {
   Plus, Send, Package, BookOpen, Play, ArrowLeft, Eye, CheckCircle,
-  XCircle, ShoppingCart, Copy, Clock, ClipboardCheck, Trash2, ChevronRight, Eraser } from "lucide-react";
+  XCircle, ShoppingCart, Copy, Clock, ClipboardCheck, Trash2, ChevronRight, Eraser,
+  Search, SkipForward, EyeOff, Check } from "lucide-react";
+import { useIsCompact, useIsMobile } from "@/hooks/use-mobile";
 
 const defaultCategories = ["Frozen", "Cooler", "Dry"];
 
@@ -31,18 +33,18 @@ export default function EnterInventoryPage() {
   const { currentRestaurant } = useRestaurant();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const isCompact = useIsCompact();
+  const isMobile = useIsMobile();
 
   const [lists, setLists] = useState<any[]>([]);
   const [selectedList, setSelectedList] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Sessions by status
   const [inProgressSessions, setInProgressSessions] = useState<any[]>([]);
   const [reviewSessions, setReviewSessions] = useState<any[]>([]);
   const [approvedSessions, setApprovedSessions] = useState<any[]>([]);
   const [approvedFilter, setApprovedFilter] = useState("30");
 
-  // Session editor state
   const [activeSession, setActiveSession] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -52,27 +54,29 @@ export default function EnterInventoryPage() {
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
 
-  // New session dialog
   const [startOpen, setStartOpen] = useState(false);
   const [sessionName, setSessionName] = useState("");
   const [selectedPar, setSelectedPar] = useState("");
   const [parGuides, setParGuides] = useState<any[]>([]);
   const [parItems, setParItems] = useState<any[]>([]);
 
-  // View session dialog
   const [viewItems, setViewItems] = useState<any[] | null>(null);
   const [viewSession, setViewSession] = useState<any>(null);
 
-  // Clear entries confirm
   const [clearEntriesSessionId, setClearEntriesSessionId] = useState<string | null>(null);
 
-  // Create Smart Order modal
   const [smartOrderSession, setSmartOrderSession] = useState<any>(null);
   const [smartOrderParGuides, setSmartOrderParGuides] = useState<any[]>([]);
   const [smartOrderSelectedPar, setSmartOrderSelectedPar] = useState("");
   const [smartOrderCreating, setSmartOrderCreating] = useState(false);
 
-  // Fetch lists
+  // Counting mode state
+  const [showOnlyEmpty, setShowOnlyEmpty] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   useEffect(() => {
     if (!currentRestaurant) return;
     supabase.from("inventory_lists").select("*").eq("restaurant_id", currentRestaurant.id)
@@ -84,7 +88,6 @@ export default function EnterInventoryPage() {
       });
   }, [currentRestaurant]);
 
-  // Fetch sessions when list changes
   useEffect(() => {
     if (!currentRestaurant) return;
     fetchSessions();
@@ -121,7 +124,6 @@ export default function EnterInventoryPage() {
     setLoading(false);
   };
 
-  // PAR guides for selected list
   useEffect(() => {
     if (!currentRestaurant || !selectedList) { setParGuides([]); return; }
     supabase.from("par_guides").select("*").eq("restaurant_id", currentRestaurant.id).eq("inventory_list_id", selectedList)
@@ -133,7 +135,6 @@ export default function EnterInventoryPage() {
     supabase.from("par_guide_items").select("*").eq("par_guide_id", selectedPar).then(({ data }) => { if (data) setParItems(data); });
   }, [selectedPar]);
 
-  // Create session
   const handleCreateSession = async () => {
     if (!currentRestaurant || !user || !selectedList || !sessionName) return;
     const { data, error } = await supabase.from("inventory_sessions").insert({
@@ -183,7 +184,6 @@ export default function EnterInventoryPage() {
     openEditor(data);
   };
 
-  // Open session editor
   const openEditor = async (session: any) => {
     setActiveSession(session);
     const { data } = await supabase.from("inventory_session_items").select("*").eq("session_id", session.id);
@@ -226,9 +226,20 @@ export default function EnterInventoryPage() {
   };
 
   const handleUpdateStock = async (id: string, stock: number) => {
-    await supabase.from("inventory_session_items").update({ current_stock: stock }).eq("id", id);
     setItems(items.map((i) => i.id === id ? { ...i, current_stock: stock } : i));
   };
+
+  const handleSaveStock = useCallback(async (id: string, stock: number) => {
+    setSavingId(id);
+    const { error } = await supabase.from("inventory_session_items").update({ current_stock: stock }).eq("id", id);
+    setSavingId(null);
+    if (error) {
+      toast.error("Could not save — tap to retry");
+    } else {
+      setSavedId(id);
+      setTimeout(() => setSavedId(prev => prev === id ? null : prev), 1500);
+    }
+  }, []);
 
   const handleSubmitForReview = async () => {
     if (!activeSession) return;
@@ -244,7 +255,6 @@ export default function EnterInventoryPage() {
     else { toast.success("Session deleted"); fetchSessions(); }
   };
 
-  // Clear entries: reset current_stock to 0 for all items in session
   const handleClearEntries = async () => {
     if (!clearEntriesSessionId) return;
     const { error } = await supabase.from("inventory_session_items")
@@ -254,7 +264,6 @@ export default function EnterInventoryPage() {
     else {
       toast.success("Entries cleared — ready for recount");
       setClearEntriesSessionId(null);
-      // If we're in the editor for this session, refresh items
       if (activeSession?.id === clearEntriesSessionId) {
         setItems(items.map(i => ({ ...i, current_stock: 0 })));
       }
@@ -299,11 +308,9 @@ export default function EnterInventoryPage() {
     fetchSessions();
   };
 
-  // Create Smart Order from approved session — only asks for PAR guide
   const openSmartOrderModal = async (session: any) => {
     setSmartOrderSession(session);
     setSmartOrderSelectedPar("");
-    // Fetch PAR guides for this session's inventory list
     if (!currentRestaurant) return;
     const { data } = await supabase.from("par_guides").select("*")
       .eq("restaurant_id", currentRestaurant.id)
@@ -315,7 +322,6 @@ export default function EnterInventoryPage() {
     if (!smartOrderSession || !smartOrderSelectedPar || !currentRestaurant || !user) return;
     setSmartOrderCreating(true);
 
-    // Compute smart order
     const { data: sessionItems } = await supabase.from("inventory_session_items").select("*").eq("session_id", smartOrderSession.id);
     const { data: parItemsData } = await supabase.from("par_guide_items").select("*").eq("par_guide_id", smartOrderSelectedPar);
 
@@ -337,7 +343,6 @@ export default function EnterInventoryPage() {
       };
     });
 
-    // Save smart order run
     const { data: run, error } = await supabase.from("smart_order_runs").insert({
       restaurant_id: currentRestaurant.id,
       session_id: smartOrderSession.id,
@@ -347,7 +352,7 @@ export default function EnterInventoryPage() {
     }).select().single();
     if (error) { toast.error(error.message); setSmartOrderCreating(false); return; }
 
-     const runItems = computed.map(i => ({
+    const runItems = computed.map(i => ({
       run_id: run.id,
       item_name: i.item_name,
       suggested_order: i.suggestedOrder,
@@ -359,7 +364,6 @@ export default function EnterInventoryPage() {
     }));
     await supabase.from("smart_order_run_items").insert(runItems);
 
-    // Create purchase history
     const { data: ph } = await supabase.from("purchase_history").insert({
       restaurant_id: currentRestaurant.id,
       inventory_list_id: smartOrderSession.inventory_list_id,
@@ -368,7 +372,7 @@ export default function EnterInventoryPage() {
     }).select().single();
 
     if (ph) {
-       const phItems = computed.filter(i => i.suggestedOrder > 0).map(i => ({
+      const phItems = computed.filter(i => i.suggestedOrder > 0).map(i => ({
         purchase_history_id: ph.id,
         item_name: i.item_name,
         quantity: i.suggestedOrder,
@@ -392,11 +396,41 @@ export default function EnterInventoryPage() {
   const filteredItems = items.filter((i) => {
     if (filterCategory !== "all" && i.category !== filterCategory) return false;
     if (search && !i.item_name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (showOnlyEmpty && Number(i.current_stock) > 0) return false;
     return true;
   });
   const categories = [...new Set(items.map((i) => i.category).filter(Boolean))];
+  const allCategories = [...defaultCategories, ...categories.filter((c) => !defaultCategories.includes(c))];
 
   const selectedListName = lists.find((l) => l.id === selectedList)?.name || "";
+
+  // Group items by category for card view
+  const groupedItems = filteredItems.reduce<Record<string, any[]>>((acc, item) => {
+    const cat = item.category || "Uncategorized";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(item);
+    return acc;
+  }, {});
+
+  const jumpToNextEmpty = () => {
+    const emptyItem = filteredItems.find(i => !i.current_stock || Number(i.current_stock) === 0);
+    if (emptyItem && inputRefs.current[emptyItem.id]) {
+      inputRefs.current[emptyItem.id]?.focus();
+      inputRefs.current[emptyItem.id]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+      toast.info("All items have been counted!");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const nextItem = filteredItems[currentIndex + 1];
+      if (nextItem && inputRefs.current[nextItem.id]) {
+        inputRefs.current[nextItem.id]?.focus();
+      }
+    }
+  };
 
   if (loading && lists.length === 0) {
     return (
@@ -411,109 +445,194 @@ export default function EnterInventoryPage() {
   // ─── SESSION EDITOR ────────────────────────────
   if (activeSession) {
     return (
-      <div className="space-y-5 animate-fade-in">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem><BreadcrumbLink href="/app/dashboard">Home</BreadcrumbLink></BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem><BreadcrumbLink className="cursor-pointer" onClick={() => { setActiveSession(null); fetchSessions(); }}>Inventory management</BreadcrumbLink></BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem><BreadcrumbPage>{activeSession.name}</BreadcrumbPage></BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setActiveSession(null); fetchSessions(); }}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">{activeSession.name}</h1>
-              <p className="text-sm text-muted-foreground">{selectedListName}</p>
-            </div>
+      <div className="space-y-0 animate-fade-in pb-24 lg:pb-0">
+        {/* Sticky top bar */}
+        <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b pb-3 pt-3 -mx-4 px-4 lg:-mx-0 lg:px-0 lg:border-0 lg:static lg:bg-transparent lg:backdrop-blur-none space-y-3">
+          <div className="hidden lg:block">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem><BreadcrumbLink href="/app/dashboard">Home</BreadcrumbLink></BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem><BreadcrumbLink className="cursor-pointer" onClick={() => { setActiveSession(null); fetchSessions(); }}>Inventory management</BreadcrumbLink></BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem><BreadcrumbPage>{activeSession.name}</BreadcrumbPage></BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => { setActiveSession(null); fetchSessions(); }}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0">
+                <h1 className="text-base lg:text-2xl font-bold tracking-tight truncate">{activeSession.name}</h1>
+                <p className="text-xs lg:text-sm text-muted-foreground truncate">{selectedListName}</p>
+              </div>
+            </div>
+            <Badge className="bg-warning/10 text-warning border-0 text-[10px] shrink-0">In progress</Badge>
+          </div>
+
+          {/* Search + filters */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="pl-8 h-9 text-sm" />
+            </div>
+            <Button
+              size="sm"
+              variant={showOnlyEmpty ? "default" : "outline"}
+              className="h-9 gap-1 text-xs shrink-0"
+              onClick={() => setShowOnlyEmpty(!showOnlyEmpty)}
+            >
+              <EyeOff className="h-3 w-3" /> Empty
+            </Button>
+            <Button size="sm" variant="outline" className="h-9 gap-1 text-xs shrink-0" onClick={jumpToNextEmpty}>
+              <SkipForward className="h-3 w-3" /> Next
+            </Button>
+          </div>
+
+          {/* Category chips */}
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+            <button
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterCategory === "all" ? "bg-primary text-primary-foreground" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}
+              onClick={() => setFilterCategory("all")}
+            >All</button>
+            {allCategories.map(c => (
+              <button
+                key={c}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterCategory === c ? "bg-primary text-primary-foreground" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}
+                onClick={() => setFilterCategory(c)}
+              >{c}</button>
+            ))}
+          </div>
+
+          {/* Desktop-only actions */}
+          <div className="hidden lg:flex gap-2">
             <Button variant="outline" className="gap-2 text-xs h-9" onClick={() => setClearEntriesSessionId(activeSession.id)}>
               <Eraser className="h-3.5 w-3.5" /> Clear entries
             </Button>
-            <Button onClick={handleSubmitForReview} className="bg-gradient-amber shadow-amber gap-2" disabled={items.length === 0}>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1.5 h-9"><Plus className="h-3.5 w-3.5" /> Add Item</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Add Item</DialogTitle></DialogHeader>
+                <div className="space-y-3">
+                  <div className="space-y-1"><Label>Item Name</Label><Input value={newItem.item_name} onChange={(e) => setNewItem({ ...newItem, item_name: e.target.value })} className="h-10" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1"><Label>Category</Label>
+                      <Select value={newItem.category} onValueChange={(v) => setNewItem({ ...newItem, category: v })}>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent>{defaultCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1"><Label>Unit</Label><Input value={newItem.unit} onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })} placeholder="lbs, packs..." className="h-10" /></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1"><Label>Stock</Label><Input type="number" value={newItem.current_stock} onChange={(e) => setNewItem({ ...newItem, current_stock: +e.target.value })} className="h-10" /></div>
+                    <div className="space-y-1"><Label>PAR Level</Label><Input type="number" value={newItem.par_level} onChange={(e) => setNewItem({ ...newItem, par_level: +e.target.value })} className="h-10" /></div>
+                    <div className="space-y-1"><Label>Unit Cost</Label><Input type="number" value={newItem.unit_cost} onChange={(e) => setNewItem({ ...newItem, unit_cost: +e.target.value })} className="h-10" /></div>
+                  </div>
+                  <Button onClick={handleAddItem} className="w-full bg-gradient-amber">Add</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            {catalogItems.length > 0 &&
+              <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-9"><BookOpen className="h-3.5 w-3.5" /> From Catalog</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader><DialogTitle>Add from Catalog</DialogTitle></DialogHeader>
+                  <div className="max-h-80 overflow-y-auto space-y-0.5">
+                    {catalogItems.map((ci) =>
+                      <div key={ci.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium">{ci.item_name}</p>
+                          <p className="text-[11px] text-muted-foreground">{[ci.category, ci.unit, ci.vendor_name].filter(Boolean).join(" · ")}</p>
+                        </div>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleAddFromCatalog(ci)}><Plus className="h-4 w-4" /></Button>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            }
+            <Button onClick={handleSubmitForReview} className="bg-gradient-amber shadow-amber gap-2 ml-auto" disabled={items.length === 0}>
               <Send className="h-4 w-4" /> Submit for Review
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2.5 items-center">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items..." className="max-w-xs h-9" />
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {[...defaultCategories, ...categories.filter((c) => !defaultCategories.includes(c))].map((c) =>
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline" className="gap-1.5 h-9"><Plus className="h-3.5 w-3.5" /> Add Item</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Add Item</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div className="space-y-1"><Label>Item Name</Label><Input value={newItem.item_name} onChange={(e) => setNewItem({ ...newItem, item_name: e.target.value })} className="h-10" /></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><Label>Category</Label>
-                    <Select value={newItem.category} onValueChange={(v) => setNewItem({ ...newItem, category: v })}>
-                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                      <SelectContent>{defaultCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1"><Label>Unit</Label><Input value={newItem.unit} onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })} placeholder="lbs, packs..." className="h-10" /></div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1"><Label>Stock</Label><Input type="number" value={newItem.current_stock} onChange={(e) => setNewItem({ ...newItem, current_stock: +e.target.value })} className="h-10" /></div>
-                  <div className="space-y-1"><Label>PAR Level</Label><Input type="number" value={newItem.par_level} onChange={(e) => setNewItem({ ...newItem, par_level: +e.target.value })} className="h-10" /></div>
-                  <div className="space-y-1"><Label>Unit Cost</Label><Input type="number" value={newItem.unit_cost} onChange={(e) => setNewItem({ ...newItem, unit_cost: +e.target.value })} className="h-10" /></div>
-                </div>
-                <Button onClick={handleAddItem} className="w-full bg-gradient-amber">Add</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          {catalogItems.length > 0 &&
-            <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1.5 h-9"><BookOpen className="h-3.5 w-3.5" /> From Catalog</Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg">
-                <DialogHeader><DialogTitle>Add from Catalog</DialogTitle></DialogHeader>
-                <div className="max-h-80 overflow-y-auto space-y-0.5">
-                  {catalogItems.map((ci) =>
-                    <div key={ci.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
-                      <div>
-                        <p className="text-sm font-medium">{ci.item_name}</p>
-                        <p className="text-[11px] text-muted-foreground">{[ci.category, ci.unit, ci.vendor_name].filter(Boolean).join(" · ")}</p>
-                      </div>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleAddFromCatalog(ci)}><Plus className="h-4 w-4" /></Button>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          }
-        </div>
-
-        {filteredItems.length === 0 ?
-          <Card className="border shadow-sm">
+        {/* Main content */}
+        {filteredItems.length === 0 ? (
+          <Card className="border shadow-sm mt-4">
             <CardContent className="empty-state">
               <Package className="empty-state-icon" />
               <p className="empty-state-title">No items yet</p>
               <p className="empty-state-description">Add items manually or from your catalog to start counting.</p>
             </CardContent>
-          </Card> :
-          <Card className="overflow-hidden border shadow-sm">
+          </Card>
+        ) : isCompact ? (
+          /* ─── CARD LAYOUT (tablet/mobile) ─── */
+          <div className="space-y-5 mt-4">
+            {Object.entries(groupedItems).map(([category, catItems]) => (
+              <div key={category}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2 px-1">{category}</p>
+                <div className="space-y-2">
+                  {catItems.map((item, idx) => {
+                    const globalIdx = filteredItems.indexOf(item);
+                    return (
+                      <Card key={item.id} className="border shadow-sm">
+                        <CardContent className="p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-sm truncate">{item.item_name}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {[item.unit, item.pack_size].filter(Boolean).join(" · ") || "—"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {savingId === item.id && <span className="text-[10px] text-muted-foreground animate-pulse">Saving…</span>}
+                              {savedId === item.id && <Check className="h-3.5 w-3.5 text-success" />}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Count</label>
+                              <Input
+                                ref={el => { inputRefs.current[item.id] = el; }}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={item.current_stock || ""}
+                                onChange={(e) => handleUpdateStock(item.id, +e.target.value)}
+                                onBlur={() => handleSaveStock(item.id, Number(item.current_stock))}
+                                onKeyDown={(e) => handleKeyDown(e, globalIdx)}
+                                className="h-12 text-lg font-mono text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                            </div>
+                            {item.par_level > 0 && (
+                              <div className="text-center shrink-0">
+                                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">PAR</label>
+                                <p className="text-lg font-mono text-muted-foreground">{item.par_level}</p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* ─── TABLE LAYOUT (desktop) ─── */
+          <Card className="overflow-hidden border shadow-sm mt-4">
             <Table>
               <TableHeader>
-               <TableRow className="bg-muted/30">
+                <TableRow className="bg-muted/30">
                   <TableHead className="text-xs font-semibold">Item</TableHead>
                   <TableHead className="text-xs font-semibold">Category</TableHead>
                   <TableHead className="text-xs font-semibold">Unit</TableHead>
@@ -523,14 +642,23 @@ export default function EnterInventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredItems.map((item) =>
+                {filteredItems.map((item, idx) =>
                   <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
-                     <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
+                    <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
                     <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{item.unit}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{item.pack_size || "—"}</TableCell>
                     <TableCell>
-                      <Input type="number" value={item.current_stock} onChange={(e) => handleUpdateStock(item.id, +e.target.value)} className="w-20 h-8 text-sm font-mono" />
+                      <Input
+                        ref={el => { inputRefs.current[item.id] = el; }}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={item.current_stock}
+                        onChange={(e) => handleUpdateStock(item.id, +e.target.value)}
+                        onBlur={() => handleSaveStock(item.id, Number(item.current_stock))}
+                        onKeyDown={(e) => handleKeyDown(e, idx)}
+                        className="w-20 h-8 text-sm font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
                     </TableCell>
                     <TableCell className="text-sm font-mono text-muted-foreground">{item.par_level}</TableCell>
                   </TableRow>
@@ -538,7 +666,35 @@ export default function EnterInventoryPage() {
               </TableBody>
             </Table>
           </Card>
-        }
+        )}
+
+        {/* Mobile/tablet bottom sticky bar */}
+        {isCompact && (
+          <div className="fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-sm border-t p-3 flex gap-2 safe-area-bottom">
+            <Button variant="outline" className="flex-1 gap-1.5 h-11 text-sm" onClick={() => setClearEntriesSessionId(activeSession.id)}>
+              <Eraser className="h-4 w-4" /> Clear
+            </Button>
+            <Button className="flex-1 bg-gradient-amber shadow-amber gap-1.5 h-11 text-sm" onClick={() => setSubmitConfirmOpen(true)} disabled={items.length === 0}>
+              <Send className="h-4 w-4" /> Submit
+            </Button>
+          </div>
+        )}
+
+        {/* Submit confirmation modal */}
+        <AlertDialog open={submitConfirmOpen} onOpenChange={setSubmitConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Submit for review?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will send the inventory count to a manager for review. You won't be able to edit counts until it's sent back.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setSubmitConfirmOpen(false); handleSubmitForReview(); }} className="bg-gradient-amber">Submit</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Clear Entries Confirm */}
         <AlertDialog open={!!clearEntriesSessionId} onOpenChange={(o) => !o && setClearEntriesSessionId(null)}>
@@ -558,6 +714,139 @@ export default function EnterInventoryPage() {
   }
 
   // ─── MAIN DASHBOARD: 3 STACKED CARDS ──────────
+  const renderSessionCard = (s: any, type: "inprogress" | "review" | "approved") => {
+    if (isCompact) {
+      return (
+        <Card key={s.id} className="border shadow-sm">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm truncate">{s.name}</p>
+                <p className="text-[11px] text-muted-foreground">{s.inventory_lists?.name}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {type === "approved" && s.approved_at ? new Date(s.approved_at).toLocaleDateString() : new Date(s.updated_at).toLocaleDateString()}
+                </p>
+              </div>
+              <Badge className={`shrink-0 text-[10px] border-0 ${
+                type === "inprogress" ? "bg-warning/10 text-warning" :
+                type === "review" ? "bg-primary/10 text-primary" :
+                "bg-success/10 text-success"
+              }`}>
+                {type === "inprogress" ? "In progress" : type === "review" ? "Review" : "Approved"}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {type === "inprogress" && (
+                <>
+                  <Button size="sm" className="bg-gradient-amber gap-1.5 h-10 text-xs flex-1" onClick={() => openEditor(s)}>Continue</Button>
+                  <Button size="sm" variant="outline" className="gap-1 h-10 text-xs" onClick={() => setClearEntriesSessionId(s.id)}>
+                    <Eraser className="h-3 w-3" /> Clear
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-10 w-10 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteSession(s.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              )}
+              {type === "review" && (
+                <>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-10 text-xs flex-1" onClick={() => handleView(s)}>
+                    <Eye className="h-3.5 w-3.5" /> View
+                  </Button>
+                  {isManagerOrOwner && (
+                    <>
+                      <Button size="sm" className="bg-success hover:bg-success/90 gap-1.5 h-10 text-xs text-success-foreground flex-1" onClick={() => handleApprove(s.id)}>
+                        <CheckCircle className="h-3.5 w-3.5" /> Approve
+                      </Button>
+                      <Button size="sm" variant="destructive" className="gap-1.5 h-10 text-xs" onClick={() => handleReject(s.id)}>
+                        <XCircle className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </>
+              )}
+              {type === "approved" && (
+                <>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-10 text-xs flex-1" onClick={() => handleView(s)}>
+                    <Eye className="h-3.5 w-3.5" /> View
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-10 text-xs" onClick={() => handleDuplicate(s)}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" className="bg-gradient-amber gap-1.5 h-10 text-xs flex-1" onClick={() => openSmartOrderModal(s)}>
+                    <ShoppingCart className="h-3.5 w-3.5" /> Smart Order
+                  </Button>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Desktop row layout
+    return (
+      <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
+        <div className="flex-1">
+          <p className="text-sm font-medium">{s.name}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {s.inventory_lists?.name}
+            {type === "approved" && s.approved_at ? ` • ${new Date(s.approved_at).toLocaleDateString()}` : ` • ${new Date(s.updated_at).toLocaleDateString()}`}
+          </p>
+        </div>
+        <Badge className={`text-[10px] border-0 ${
+          type === "inprogress" ? "bg-warning/10 text-warning" :
+          type === "review" ? "bg-primary/10 text-primary" :
+          "bg-success/10 text-success"
+        }`}>
+          {type === "inprogress" ? "In progress" : type === "review" ? "Ready for review" : "Approved"}
+        </Badge>
+        <div className="flex items-center gap-2 ml-4">
+          {type === "inprogress" && (
+            <>
+              <Button size="sm" className="bg-gradient-amber gap-1.5 h-8 text-xs" onClick={() => openEditor(s)}>Continue</Button>
+              <Button size="sm" variant="outline" className="gap-1 h-8 text-xs" onClick={() => setClearEntriesSessionId(s.id)}>
+                <Eraser className="h-3 w-3" /> Clear
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteSession(s.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
+          {type === "review" && (
+            <>
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleView(s)}>
+                <Eye className="h-3.5 w-3.5" /> View
+              </Button>
+              {isManagerOrOwner && (
+                <>
+                  <Button size="sm" className="bg-success hover:bg-success/90 gap-1.5 h-8 text-xs text-success-foreground" onClick={() => handleApprove(s.id)}>
+                    <CheckCircle className="h-3.5 w-3.5" /> Approve
+                  </Button>
+                  <Button size="sm" variant="destructive" className="gap-1.5 h-8 text-xs" onClick={() => handleReject(s.id)}>
+                    <XCircle className="h-3.5 w-3.5" /> Reject
+                  </Button>
+                </>
+              )}
+            </>
+          )}
+          {type === "approved" && (
+            <>
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleView(s)}>
+                <Eye className="h-3.5 w-3.5" /> View
+              </Button>
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleDuplicate(s)}>
+                <Copy className="h-3.5 w-3.5" /> Duplicate
+              </Button>
+              <Button size="sm" className="bg-gradient-amber gap-1.5 h-8 text-xs" onClick={() => openSmartOrderModal(s)}>
+                <ShoppingCart className="h-3.5 w-3.5" /> Create Smart Order
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <Breadcrumb>
@@ -568,57 +857,35 @@ export default function EnterInventoryPage() {
         </BreadcrumbList>
       </Breadcrumb>
 
-      <h1 className="text-2xl font-bold tracking-tight">Inventory management</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-xl lg:text-2xl font-bold tracking-tight">Inventory management</h1>
+        <Button className="bg-gradient-amber shadow-amber gap-2 h-10" onClick={() => setStartOpen(true)}>
+          <Play className="h-4 w-4" /> Start inventory
+        </Button>
+      </div>
 
       {/* CARD 1: In Progress */}
       <Card className="border shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base font-semibold">In progress</CardTitle>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">View by:</span>
-            <Select value={selectedList} onValueChange={setSelectedList}>
-              <SelectTrigger className="h-8 w-48 text-xs"><SelectValue placeholder="Inventory List" /></SelectTrigger>
-              <SelectContent>
-                {lists.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+        <CardHeader className="flex flex-row items-center justify-between pb-3 gap-2">
+          <CardTitle className="text-base font-semibold shrink-0">In progress</CardTitle>
+          <Select value={selectedList} onValueChange={setSelectedList}>
+            <SelectTrigger className="h-8 w-40 lg:w-48 text-xs"><SelectValue placeholder="Inventory List" /></SelectTrigger>
+            <SelectContent>
+              {lists.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </CardHeader>
         <CardContent className="pt-0">
-          {inProgressSessions.length === 0 ?
+          {inProgressSessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <Clock className="h-10 w-10 text-muted-foreground/20 mb-3" />
-              <p className="text-sm text-muted-foreground mb-4">No inventory in progress</p>
-              <Button className="bg-gradient-amber shadow-amber gap-2" onClick={() => setStartOpen(true)}>
-                <Play className="h-4 w-4" /> Start inventory
-              </Button>
-            </div> :
-            <div className="space-y-2">
-              {inProgressSessions.map((s) =>
-                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{s.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{s.inventory_lists?.name}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Badge className="bg-warning/10 text-warning border-0 text-[10px]">In progress</Badge>
-                    <span className="text-xs text-muted-foreground">{new Date(s.updated_at).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    <Button size="sm" className="bg-gradient-amber gap-1.5 h-8 text-xs" onClick={() => openEditor(s)}>
-                      Continue
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1 h-8 text-xs" onClick={() => setClearEntriesSessionId(s.id)}>
-                      <Eraser className="h-3 w-3" /> Clear
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteSession(s.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <p className="text-sm text-muted-foreground">No inventory in progress</p>
             </div>
-          }
+          ) : (
+            <div className={`space-y-2 ${isCompact ? "grid gap-3 sm:grid-cols-2" : ""}`}>
+              {inProgressSessions.map(s => renderSessionCard(s, "inprogress"))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -628,45 +895,23 @@ export default function EnterInventoryPage() {
           <CardTitle className="text-base font-semibold">Review</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          {reviewSessions.length === 0 ?
+          {reviewSessions.length === 0 ? (
             <div className="text-center items-center justify-center flex flex-row py-0">
               <ClipboardCheck className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <p className="text-sm text-muted-foreground">No inventory</p>
-            </div> :
-            <div className="space-y-2">
-              {reviewSessions.map((s) =>
-                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{s.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{s.inventory_lists?.name} • {new Date(s.updated_at).toLocaleDateString()}</p>
-                  </div>
-                  <Badge className="bg-primary/10 text-primary border-0 text-[10px]">Ready for review</Badge>
-                  <div className="flex items-center gap-2 ml-4">
-                    <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleView(s)}>
-                      <Eye className="h-3.5 w-3.5" /> View
-                    </Button>
-                    {isManagerOrOwner &&
-                      <>
-                        <Button size="sm" className="bg-success hover:bg-success/90 gap-1.5 h-8 text-xs text-success-foreground" onClick={() => handleApprove(s.id)}>
-                          <CheckCircle className="h-3.5 w-3.5" /> Approve
-                        </Button>
-                        <Button size="sm" variant="destructive" className="gap-1.5 h-8 text-xs" onClick={() => handleReject(s.id)}>
-                          <XCircle className="h-3.5 w-3.5" /> Reject
-                        </Button>
-                      </>
-                    }
-                  </div>
-                </div>
-              )}
             </div>
-          }
+          ) : (
+            <div className={`space-y-2 ${isCompact ? "grid gap-3 sm:grid-cols-2" : ""}`}>
+              {reviewSessions.map(s => renderSessionCard(s, "review"))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* CARD 3: Approved */}
       <Card className="border shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base font-semibold">Approved</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between pb-3 gap-2">
+          <CardTitle className="text-base font-semibold shrink-0">Approved</CardTitle>
           <Select value={approvedFilter} onValueChange={setApprovedFilter}>
             <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -677,36 +922,16 @@ export default function EnterInventoryPage() {
           </Select>
         </CardHeader>
         <CardContent className="pt-0">
-          {approvedSessions.length === 0 ?
+          {approvedSessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <CheckCircle className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <p className="text-sm text-muted-foreground">No inventory</p>
-            </div> :
-            <div className="space-y-2">
-              {approvedSessions.map((s) =>
-                <div key={s.id} className="flex items-center justify-between py-3 px-4 rounded-lg border bg-muted/20">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">{s.name}</p>
-                      <Badge className="bg-success/10 text-success border-0 text-[10px]">Approved</Badge>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">{s.inventory_lists?.name} • {s.approved_at ? new Date(s.approved_at).toLocaleDateString() : ""}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleView(s)}>
-                      <Eye className="h-3.5 w-3.5" /> View
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleDuplicate(s)}>
-                      <Copy className="h-3.5 w-3.5" /> Duplicate
-                    </Button>
-                    <Button size="sm" className="bg-gradient-amber gap-1.5 h-8 text-xs" onClick={() => openSmartOrderModal(s)}>
-                      <ShoppingCart className="h-3.5 w-3.5" /> Create Smart Order
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
-          }
+          ) : (
+            <div className={`space-y-2 ${isCompact ? "grid gap-3 sm:grid-cols-2" : ""}`}>
+              {approvedSessions.map(s => renderSessionCard(s, "approved"))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -741,7 +966,7 @@ export default function EnterInventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Smart Order Modal — asks ONLY for PAR guide */}
+      {/* Create Smart Order Modal */}
       <Dialog open={!!smartOrderSession} onOpenChange={(o) => !o && setSmartOrderSession(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Create Smart Order</DialogTitle></DialogHeader>
@@ -780,7 +1005,7 @@ export default function EnterInventoryPage() {
           <div className="rounded-lg border overflow-hidden">
             <Table>
               <TableHeader>
-               <TableRow className="bg-muted/30">
+                <TableRow className="bg-muted/30">
                   <TableHead className="text-xs font-semibold">Item</TableHead>
                   <TableHead className="text-xs font-semibold">Category</TableHead>
                   <TableHead className="text-xs font-semibold">Pack Size</TableHead>
