@@ -191,10 +191,11 @@ export default function PARManagementPage() {
           <Card className="overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/30">
+               <TableRow className="bg-muted/30">
                   <TableHead className="text-xs font-semibold">Item</TableHead>
                   <TableHead className="text-xs font-semibold">Category</TableHead>
                   <TableHead className="text-xs font-semibold">Unit</TableHead>
+                  <TableHead className="text-xs font-semibold">Pack Size</TableHead>
                   <TableHead className="text-xs font-semibold">PAR Level</TableHead>
                   {isManagerOrOwner && <TableHead className="w-10"></TableHead>}
                 </TableRow>
@@ -202,9 +203,10 @@ export default function PARManagementPage() {
               <TableBody>
                 {items.map(i => (
                   <TableRow key={i.id} className="hover:bg-muted/30 transition-colors">
-                    <TableCell className="font-medium text-sm">{i.item_name}</TableCell>
+                     <TableCell className="font-medium text-sm">{i.item_name}</TableCell>
                     <TableCell><Badge variant="secondary" className="text-[10px] font-normal">{i.category}</Badge></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{i.unit}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{i.pack_size || "—"}</TableCell>
                     <TableCell>
                       {isManagerOrOwner ? (
                         <Input
@@ -226,9 +228,9 @@ export default function PARManagementPage() {
                     )}
                   </TableRow>
                 ))}
-                {items.length === 0 && (
+                 {items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8 text-sm">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8 text-sm">
                       No items in this PAR guide.
                     </TableCell>
                   </TableRow>

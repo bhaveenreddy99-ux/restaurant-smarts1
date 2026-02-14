@@ -85,9 +85,10 @@ export default function PurchaseHistoryPage() {
           </DialogHeader>
           <div className="rounded-lg border overflow-hidden">
             <Table>
-              <TableHeader>
+               <TableHeader>
                 <TableRow className="bg-muted/30">
                   <TableHead className="text-xs font-semibold">Item</TableHead>
+                  <TableHead className="text-xs font-semibold">Pack Size</TableHead>
                   <TableHead className="text-xs font-semibold">Quantity</TableHead>
                   <TableHead className="text-xs font-semibold">Unit Cost</TableHead>
                   <TableHead className="text-xs font-semibold">Total</TableHead>
@@ -97,6 +98,7 @@ export default function PurchaseHistoryPage() {
                 {viewItems?.map(item => (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{item.pack_size || "—"}</TableCell>
                     <TableCell className="font-mono text-sm">{item.quantity}</TableCell>
                     <TableCell className="font-mono text-sm">{item.unit_cost ? `$${Number(item.unit_cost).toFixed(2)}` : "—"}</TableCell>
                     <TableCell className="font-mono text-sm">{item.total_cost ? `$${Number(item.total_cost).toFixed(2)}` : "—"}</TableCell>

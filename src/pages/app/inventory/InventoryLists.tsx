@@ -440,11 +440,12 @@ export default function InventoryListsPage() {
 
         <Card className="overflow-hidden border shadow-sm">
           <Table>
-            <TableHeader>
+             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs font-semibold">Item Name</TableHead>
                 <TableHead className="text-xs font-semibold">Category</TableHead>
                 <TableHead className="text-xs font-semibold">Unit</TableHead>
+                <TableHead className="text-xs font-semibold">Pack Size</TableHead>
                 <TableHead className="text-xs font-semibold">Vendor SKU</TableHead>
                 <TableHead className="text-xs font-semibold">Unit Cost</TableHead>
                 <TableHead className="text-xs font-semibold w-16">Actions</TableHead>
@@ -453,15 +454,16 @@ export default function InventoryListsPage() {
             <TableBody>
               {filteredCatalog.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">No items found.</TableCell>
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No items found.</TableCell>
                 </TableRow>
               ) : filteredCatalog.map(item => (
                 <TableRow key={item.id} className="hover:bg-muted/20 transition-colors">
-                  {editingItem === item.id ? (
+                 {editingItem === item.id ? (
                     <>
                       <TableCell><Input className="h-8 text-sm" value={editValues.item_name} onChange={e => setEditValues({ ...editValues, item_name: e.target.value })} /></TableCell>
                       <TableCell><Input className="h-8 text-sm" value={editValues.category || ""} onChange={e => setEditValues({ ...editValues, category: e.target.value })} /></TableCell>
                       <TableCell><Input className="h-8 text-sm" value={editValues.unit || ""} onChange={e => setEditValues({ ...editValues, unit: e.target.value })} /></TableCell>
+                      <TableCell><Input className="h-8 text-sm" value={editValues.pack_size || ""} onChange={e => setEditValues({ ...editValues, pack_size: e.target.value })} /></TableCell>
                       <TableCell><Input className="h-8 text-sm" value={editValues.vendor_sku || ""} onChange={e => setEditValues({ ...editValues, vendor_sku: e.target.value })} /></TableCell>
                       <TableCell><Input className="h-8 text-sm w-20" type="number" value={editValues.default_unit_cost || 0} onChange={e => setEditValues({ ...editValues, default_unit_cost: +e.target.value })} /></TableCell>
                       <TableCell>
@@ -476,11 +478,12 @@ export default function InventoryListsPage() {
                       <TableCell className="font-medium text-sm">{item.item_name}</TableCell>
                       <TableCell>{item.category ? <Badge variant="secondary" className="text-[10px] font-normal">{item.category}</Badge> : <span className="text-xs text-muted-foreground/50">—</span>}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{item.unit || "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{item.pack_size || "—"}</TableCell>
                       <TableCell className="text-xs font-mono text-muted-foreground">{item.vendor_sku || "—"}</TableCell>
                       <TableCell className="text-sm font-mono">{item.default_unit_cost != null ? `$${item.default_unit_cost}` : "—"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setEditingItem(item.id); setEditValues({ item_name: item.item_name, category: item.category, unit: item.unit, vendor_sku: item.vendor_sku, default_unit_cost: item.default_unit_cost }); }}>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setEditingItem(item.id); setEditValues({ item_name: item.item_name, category: item.category, unit: item.unit, pack_size: item.pack_size, vendor_sku: item.vendor_sku, default_unit_cost: item.default_unit_cost }); }}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => handleDeleteItem(item.id)}>

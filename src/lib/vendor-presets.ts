@@ -142,7 +142,7 @@ const FIELD_SYNONYMS: Record<CanonicalField, string[]> = {
   ],
   pack_size: [
     "pack", "packsize", "pack/size", "casesize", "casepack", "packagesize",
-    "portionsize",
+    "portionsize", "packqty", "packquantity", "itemsize", "unitsize", "size",
   ],
   vendor_name: [
     "vendor", "vendorname", "supplier", "primaryvendor", "suppliername",
